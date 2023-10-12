@@ -14,6 +14,7 @@ def LHS_pde(func, tx): #changed to let this use the pair (learnable_tree, bs_act
 
     tx_expz = torch.stack((t.repeat(z.shape[0], 1).T, torch.outer(x, torch.exp(z))), dim=2)
     nu = lam / torch.sqrt(2 * torch.Tensor([math.pi]) * sigma) * torch.exp(-.5 * ((z - mu) / sigma) ** 2)
+    nu.cuda()
 
     ### We have two cases:  either we pass in the condidate function in the form
     ### (learnable_tree, bs_action) or the true function (for measuring performance)
