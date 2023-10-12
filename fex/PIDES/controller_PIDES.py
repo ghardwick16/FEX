@@ -583,8 +583,8 @@ def get_reward(bs, actions, learnable_tree, tree_params, tree_optim):
         tree_optim = torch.optim.Adam(tree_params, lr=0.001)
         for _ in range(20):
             bd_pts = get_boundary(args.bdbs, dim)
-            bc_true = torch.squeeze(func.true_solution(bd_pts))
-            bd_nn = learnable_tree(bd_pts, bs_action)
+            bc_true = func.true_solution(bd_pts)
+            bd_nn = torch.squeeze(learnable_tree(bd_pts, bs_action))
             bd_error = torch.nn.functional.mse_loss(bc_true, bd_nn)
 
             # changing LHS_pde function to simply take the learnable tree directly for ease of computation of the
