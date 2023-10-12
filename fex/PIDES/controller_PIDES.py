@@ -23,7 +23,7 @@ parser.add_argument('--greedy', default=0, type=float)
 parser.add_argument('--random_step', default=0, type=float)
 parser.add_argument('--ckpt', default='', type=str)
 parser.add_argument('--gpu', default=0, type=int)
-parser.add_argument('--dim', default=1, type=int)
+parser.add_argument('--dim', default=2, type=int)
 parser.add_argument('--tree', default='depth2', type=str)
 parser.add_argument('--lr', default=1e-2, type=float)
 parser.add_argument('--percentile', default=0.5, type=float)
@@ -653,7 +653,6 @@ def best_error(best_action, learnable_tree):
     x1 = (torch.rand(args.domainbs, args.dim - 1).cuda()) * (args.right - args.left) + args.left
     x = torch.cat((t, x1), 1)
     x.requires_grad = True
-    z = torch.linspace(args.left, args.right, 1000)
     bs_action = best_action
 
     lhs_func = (learnable_tree, bs_action)
