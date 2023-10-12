@@ -3,25 +3,49 @@ import torch
 from torch import sin, cos, exp
 import math
 
-scale = math.pi/4
+def LHS_pde(func, tx): #changed to let this use the pair (learnable_tree, bs_action) for computation directly
+    mu = .4
+    sigma = .25
+    lam = .3
+    num_traps = 100
+    z = torch.linspace(0, 1, num_traps).cuda()
+    t = torch.squeeze(tx[..., 0]).cuda()
+    x = torch.squeeze(tx[..., 1:]).cuda()
 
-def LHS_pde(u, x, dim_set):
+    tx_expz = torch.stack((t.repeat(z.shape[0], 1).T, torch.outer(x, torch.exp(z))), dim=2)
+    nu = lam / torch.sqrt(2 * torch.Tensor([math.pi]) * sigma) * torch.exp(-.5 * ((z - mu) / sigma) ** 2)
 
+    ### We have two cases:  either we pass in the condidate function in the form
+    ### (learnable_tree, bs_action) or the true function (for measuring performance)
+    if func is tuple:
+        learnable_tree = func[0]
+        bs_action = func[1]
+        u = learnable_tree(tx, bs_action).cuda()
+        u_expz = learnable_tree(tx_expz, bs_action).cuda()
+
+    else:
+        u = func(tx).cuda()
+        u_expz = func(tx_expz).cuda()
+
+    u_tx = u.repeat(z.shape[0], 1).T.cuda()
     v = torch.ones(u.shape).cuda()
-    z = x[:, 1:]  # gets integrated over R, should just be a lnspace of same size as x[1:]
-    # since the first dimension of x is time
-    ux = torch.autograd.grad(u, x, grad_outputs=v, create_graph=True)[0]
-    integrand = u*torch.exp(z) - u - x[:, 1:]*(torch.exp(z) - 1)*ux[:, 1:]
-    integral_dz = torch.trapezoid(integrand, z, dim=-1)
-    LHS = ux[:, 0] + integral_dz
-    return LHS
+    du = torch.autograd.grad(u, tx, grad_outputs=v, create_graph=True)[0]
+    ut = du[:, 0]
+    ux = du[:, 1]
+    f_term = torch.outer(x, torch.exp(z) - 1) * ux.repeat(z.shape[0], 1).T
 
-def RHS_pde(x):
-    bs = x.size(0)
+    # construct the integrand:
+    integrand = (u_expz - u_tx - f_term)*nu
+
+    integral_dz = torch.trapezoid(integrand, z, dim=1)
+    return ut + integral_dz
+
+def RHS_pde(tx):
+    bs = tx.size(0)
     return torch.zeros(bs, 1).cuda()
 
-def true_solution(x): #for the most simple case, u(t,x) = x
-    return x
+def true_solution(tx): #for the most simple case, u(t,x) = x
+    return torch.squeeze(tx[..., 1:])
 
 
 unary_functions = [lambda x: 0*x**2,
@@ -83,7 +107,7 @@ if __name__ == '__main__':
     '''
     PDE loss
     '''
-    LHS = LHS_pde(function(x), x)
+    LHS = LHS_pde(function, x)
     RHS = RHS_pde(x)
     pde_loss = torch.nn.functional.mse_loss(LHS, RHS)
 

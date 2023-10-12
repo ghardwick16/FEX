@@ -23,7 +23,7 @@ parser.add_argument('--greedy', default=0, type=float)
 parser.add_argument('--random_step', default=0, type=float)
 parser.add_argument('--ckpt', default='', type=str)
 parser.add_argument('--gpu', default=0, type=int)
-parser.add_argument('--dim', default=20, type=int)
+parser.add_argument('--dim', default=1, type=int)
 parser.add_argument('--tree', default='depth2', type=str)
 parser.add_argument('--lr', default=1e-2, type=float)
 parser.add_argument('--percentile', default=0.5, type=float)
@@ -576,6 +576,7 @@ def get_reward(bs, actions, learnable_tree, tree_params, tree_optim):
     for bs_idx in range(batch_size):
 
         bs_action = [v[bs_idx] for v in actions]
+        lhs_func = (learnable_tree, bs_action)
         # regression_error = torch.nn.functional.mse_loss(learnable_tree(x, bs_action), func.true_solution(x))
 
         reset_params(tree_params)
@@ -585,7 +586,10 @@ def get_reward(bs, actions, learnable_tree, tree_params, tree_optim):
             bc_true = func.true_solution(bd_pts)
             bd_nn = learnable_tree(bd_pts, bs_action)
             bd_error = torch.nn.functional.mse_loss(bc_true, bd_nn)
-            function_error = torch.nn.functional.mse_loss(func.LHS_pde(learnable_tree(x, bs_action), x, dim), func.RHS_pde(x))
+
+            # changing LHS_pde function to simply take the learnable tree directly for ease of computation of the
+            # integral
+            function_error = torch.nn.functional.mse_loss(func.LHS_pde(lhs_func, x), func.RHS_pde(x))
             loss = function_error + 100*bd_error
             tree_optim.zero_grad()
             loss.backward()
@@ -602,7 +606,7 @@ def get_reward(bs, actions, learnable_tree, tree_params, tree_optim):
             bc_true = func.true_solution(bd_pts)
             bd_nn = learnable_tree(bd_pts, bs_action)
             bd_error = torch.nn.functional.mse_loss(bc_true, bd_nn)
-            function_error = torch.nn.functional.mse_loss(func.LHS_pde(learnable_tree(x, bs_action), x, dim), func.RHS_pde(x))
+            function_error = torch.nn.functional.mse_loss(func.LHS_pde(lhs_func, x), func.RHS_pde(x))
             loss = function_error + 100*bd_error
             print('loss before: ', loss.item())
             error_hist.append(loss.item())
@@ -612,7 +616,7 @@ def get_reward(bs, actions, learnable_tree, tree_params, tree_optim):
         tree_optim.step(closure)
 
 
-        function_error = torch.nn.functional.mse_loss(func.LHS_pde(learnable_tree(x, bs_action), x, dim), func.RHS_pde(x))
+        function_error = torch.nn.functional.mse_loss(func.LHS_pde(lhs_func, x), func.RHS_pde(x))
         bd_pts = get_boundary(args.bdbs, dim)
         bc_true = func.true_solution(bd_pts)
         bd_nn = learnable_tree(bd_pts, bs_action)
@@ -647,14 +651,17 @@ def best_error(best_action, learnable_tree):
     x1 = (torch.rand(args.domainbs, args.dim - 1).cuda()) * (args.right - args.left) + args.left
     x = torch.cat((t, x1), 1)
     x.requires_grad = True
-
+    z = torch.linspace(args.left, args.right, 1000)
     bs_action = best_action
+
+    lhs_func = (learnable_tree, bs_action)
+
 
     bd_pts = get_boundary(args.bdbs, dim)
     bc_true = func.true_solution(bd_pts)
     bd_nn = learnable_tree(bd_pts, bs_action)
     bd_error = torch.nn.functional.mse_loss(bc_true, bd_nn)
-    function_error = torch.nn.functional.mse_loss(func.LHS_pde(learnable_tree(x, bs_action), x, dim), func.RHS_pde(x))
+    function_error = torch.nn.functional.mse_loss(func.LHS_pde(lhs_func, x), func.RHS_pde(x))
     regression_error = function_error + 100 * bd_error
 
     print('bd error: {}  '.format(bd_error.item()), ' eigen: {} '.format(function_error.item()))
