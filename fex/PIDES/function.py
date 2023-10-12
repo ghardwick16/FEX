@@ -25,7 +25,7 @@ def LHS_pde(func, tx): #changed to let this use the pair (learnable_tree, bs_act
         u = learnable_tree(tx, bs_action).cuda()
         u_expz = learnable_tree(tx_expz, bs_action).cuda()
 
-    else:
+    elif func is not tuple:
         u = func(tx).cuda()
         u_expz = func(tx_expz).cuda()
 
