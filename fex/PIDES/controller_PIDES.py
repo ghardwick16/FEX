@@ -46,7 +46,9 @@ dim = args.dim
 
 def get_boundary(num_pts, dim):
     bd_pts = (torch.rand(num_pts, dim).cuda()) * (args.right - args.left) + args.left
-    bd_pts[:, 0] = 0
+    bd_pts[:, 0] = 1 #the 0th index would be for time, which we want to be one since the
+                     #given boundary condition is u(T,x) = x and T = max time  = 1 since we
+                     #let t be in [0,1]
     return bd_pts
 
 
