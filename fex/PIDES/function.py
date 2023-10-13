@@ -13,7 +13,7 @@ def LHS_pde(func, tx): #changed to let this use the pair (learnable_tree, bs_act
     x = torch.squeeze(tx[..., 1:]).cuda()
 
     nu = lam / torch.sqrt(2 * torch.Tensor([math.pi]) * sigma).cuda() * torch.exp(-.5 * ((z - mu) / sigma).cuda() ** 2)
-
+    print(nu.shape)
     tx_expz = torch.stack((t.repeat(z.shape[0], 1).T, torch.outer(x, torch.exp(z).cuda())), dim=2)
     ### We have two cases:  either we pass in the condidate function in the form
     ### (learnable_tree, bs_action) or the true function (for measuring performance)
@@ -35,6 +35,8 @@ def LHS_pde(func, tx): #changed to let this use the pair (learnable_tree, bs_act
     print(integrand.shape)
     exp_z = torch.exp(z).cuda()
     for i in range(u_expz.shape[0]):
+        p = (u_expz[i, :] - u[i] - x[i] * (exp_z - 1) * ux[i])
+        print(p.shape)
         integrand[i, :] = torch.mul((u_expz[i, :] - u[i] - x[i] * (exp_z - 1) * ux[i]), nu)
     integral_dz = torch.trapezoid(integrand, z, dim=1)
     return ut + integral_dz
