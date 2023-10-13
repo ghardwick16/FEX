@@ -29,16 +29,13 @@ def LHS_pde(func, tx): #changed to let this use the pair (learnable_tree, bs_act
         u = func(tx).cuda()
         u_expz = func(tx_expz).cuda()
 
-    u_tx = u.repeat(z.shape[0], 1).T.cuda()
     v = torch.ones(u.shape).cuda()
     du = torch.autograd.grad(u, tx, grad_outputs=v, create_graph=True)[0]
     ut = du[:, 0]
     ux = du[:, 1]
-    f_term = torch.outer(x, torch.exp(z).cuda() - 1) * ux.repeat(z.shape[0], 1).T
-
-    # construct the integrand:
-    integrand = (u_expz - u_tx - f_term)*nu
-
+    integrand = torch.emty_like(u_expz)
+    for i in range(u_expz.shape[0]):
+        integrand[i, :] = (u_expz[i, :] - u[i] - x[i] * (torch.exp(z) - 1) * ux[i]) * nu
     integral_dz = torch.trapezoid(integrand, z, dim=1)
     return ut + integral_dz
 
