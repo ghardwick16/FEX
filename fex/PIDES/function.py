@@ -7,7 +7,7 @@ def LHS_pde(func, tx): #changed to let this use the pair (learnable_tree, bs_act
     mu = .4
     sigma = .25
     lam = .3
-    num_traps = 100
+    num_traps = 10
     z = torch.linspace(0, 1, num_traps).cuda()
     t = torch.squeeze(tx[..., 0]).cuda()
     x = torch.squeeze(tx[..., 1:]).cuda()
