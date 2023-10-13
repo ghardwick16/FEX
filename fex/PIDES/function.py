@@ -8,13 +8,13 @@ def LHS_pde(func, tx): #changed to let this use the pair (learnable_tree, bs_act
     sigma = .25
     lam = .3
     num_traps = 100
-    z = torch.linspace(0, 1, num_traps)
+    z = torch.linspace(0, 1, num_traps).cuda()
     t = torch.squeeze(tx[..., 0]).cuda()
     x = torch.squeeze(tx[..., 1:]).cuda()
 
     nu = lam / torch.sqrt(2 * torch.Tensor([math.pi]) * sigma) * torch.exp(-.5 * ((z - mu) / sigma) ** 2)
     nu.cuda()
-    z.cuda()
+
 
     tx_expz = torch.stack((t.repeat(z.shape[0], 1).T, torch.outer(x, torch.exp(z).cuda())), dim=2)
     ### We have two cases:  either we pass in the condidate function in the form
@@ -34,8 +34,9 @@ def LHS_pde(func, tx): #changed to let this use the pair (learnable_tree, bs_act
     ut = du[:, 0].cuda()
     ux = du[:, 1].cuda()
     integrand = torch.empty_like(u_expz).cuda()
+    exp_z = torch.exp(z).cuda()
     for i in range(u_expz.shape[0]):
-        integrand[i, :] = (u_expz[i, :] - u[i] - x[i] * (torch.exp(z) - 1).cuda() * ux[i]) * nu
+        integrand[i, :] = (u_expz[i, :] - u[i] - x[i] * (exp_z - 1) * ux[i]) * nu
     integral_dz = torch.trapezoid(integrand, z, dim=1)
     return ut + integral_dz
 
