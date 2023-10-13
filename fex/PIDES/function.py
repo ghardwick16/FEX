@@ -31,11 +31,11 @@ def LHS_pde(func, tx): #changed to let this use the pair (learnable_tree, bs_act
 
     v = torch.ones(u.shape).cuda()
     du = torch.autograd.grad(u, tx, grad_outputs=v, create_graph=True)[0]
-    ut = du[:, 0]
-    ux = du[:, 1]
+    ut = du[:, 0].cuda()
+    ux = du[:, 1].cuda()
     integrand = torch.empty_like(u_expz)
     for i in range(u_expz.shape[0]):
-        integrand[i, :] = (u_expz[i, :] - u[i] - x[i] * (torch.exp(z) - 1) * ux[i]) * nu
+        integrand[i, :] = (u_expz[i, :] - u[i] - x[i] * (torch.exp(z) - 1).cuda() * ux[i]) * nu
     integral_dz = torch.trapezoid(integrand, z, dim=1)
     return ut + integral_dz
 
