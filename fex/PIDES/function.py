@@ -12,9 +12,7 @@ def LHS_pde(func, tx): #changed to let this use the pair (learnable_tree, bs_act
     t = torch.squeeze(tx[..., 0]).cuda()
     x = torch.squeeze(tx[..., 1:]).cuda()
 
-    nu = lam / torch.sqrt(2 * torch.Tensor([math.pi]) * sigma) * torch.exp(-.5 * ((z - mu) / sigma) ** 2)
-    nu.cuda()
-
+    nu = lam / torch.sqrt(2 * torch.Tensor([math.pi]) * sigma).cuda() * torch.exp(-.5 * ((z - mu) / sigma).cuda() ** 2)
 
     tx_expz = torch.stack((t.repeat(z.shape[0], 1).T, torch.outer(x, torch.exp(z).cuda())), dim=2)
     ### We have two cases:  either we pass in the condidate function in the form
