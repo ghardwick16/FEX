@@ -13,7 +13,6 @@ def LHS_pde(func, tx): #changed to let this use the pair (learnable_tree, bs_act
     x = torch.squeeze(tx[..., 1:]).cuda()
 
     nu = lam / torch.sqrt(2 * torch.Tensor([math.pi]) * sigma).cuda() * torch.exp(-.5 * ((z - mu) / sigma).cuda() ** 2)
-    print(nu.shape)
     tx_expz = torch.stack((t.repeat(z.shape[0], 1).T, torch.outer(x, torch.exp(z).cuda())), dim=2)
     ### We have two cases:  either we pass in the condidate function in the form
     ### (learnable_tree, bs_action) or the true function (for measuring performance)
@@ -32,11 +31,14 @@ def LHS_pde(func, tx): #changed to let this use the pair (learnable_tree, bs_act
     ut = du[:, 0].cuda()
     ux = du[:, 1].cuda()
     integrand = torch.empty(tx.shape[0], num_traps).cuda()
-    print(integrand.shape)
     exp_z = torch.exp(z).cuda()
     for i in range(u_expz.shape[0]):
         print(nu.shape)
-        print((u_expz[i, :] - u[i] - x[i] * (exp_z - 1) * ux[i]).shape)
+        print(u_expz[i, :].shape)
+        print(u[i].shape)
+        print(x[i].shape)
+        print((exp_z - 1).shape)
+        print(ux[i].shape)
         print(torch.mul(u_expz[i, :] - u[i] - x[i] * (exp_z - 1) * ux[i], nu).shape)
         integrand[i, :] = torch.mul(u_expz[i, :] - u[i] - x[i] * (exp_z - 1) * ux[i], nu)
     integral_dz = torch.trapezoid(integrand, z, dim=1)
