@@ -34,7 +34,7 @@ def LHS_pde(func, tx): #changed to let this use the pair (learnable_tree, bs_act
     du = torch.autograd.grad(u, tx, grad_outputs=v, create_graph=True)[0]
     ut = du[:, 0]
     ux = du[:, 1]
-    f_term = torch.outer(x, torch.exp(z) - 1) * ux.repeat(z.shape[0], 1).T
+    f_term = torch.outer(x, torch.exp(z).cuda() - 1) * ux.repeat(z.shape[0], 1).T
 
     # construct the integrand:
     integrand = (u_expz - u_tx - f_term)*nu
