@@ -34,6 +34,7 @@ def LHS_pde(func, tx): #changed to let this use the pair (learnable_tree, bs_act
     integrand = torch.empty(tx.shape[0], num_traps).cuda()
     print(integrand.shape)
     exp_z = torch.exp(z).cuda()
+    print(exp_z.shape)
     for i in range(u_expz.shape[0]):
         print((u_expz[i, :] - u[i] - (x[i] * (exp_z - 1) * ux[i])).shape)
         integrand[i, :] = torch.mul((u_expz[i, :] - u[i] - (x[i] * (exp_z - 1) * ux[i])), nu)
