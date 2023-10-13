@@ -35,7 +35,7 @@ def LHS_pde(func, tx): #changed to let this use the pair (learnable_tree, bs_act
     for i in range(u_expz.shape[0]):
         print(nu.shape)
         print(u_expz[i, :].shape)
-        print(u[i].shape)
+        print(u[i].shape, u[i])
         print(x[i].shape)
         print((exp_z - 1).shape)
         print(ux[i].shape)
