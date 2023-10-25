@@ -8,8 +8,8 @@ import math
 def integrand(func, mu, sigma, lam, tx, z):
     ### We have two cases:  either we pass in the candidate function in the form
     ### (learnable_tree, bs_action) or the true function (for measuring performance)
-    t = tx[:, 0].cuda()
-    x = tx[:, 1:].cuda()
+    t = tx[0].cuda()
+    x = tx[1:].cuda()
     # u(t, x)
     u = func(tx).cuda()
     # u(t, x + z)
