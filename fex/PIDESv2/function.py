@@ -8,8 +8,8 @@ import math
 def integrand(func, mu, sigma, lam, tx, z):
     ### We have two cases:  either we pass in the candidate function in the form
     ### (learnable_tree, bs_action) or the true function (for measuring performance)
-    t = tx[..., 0].reshape(1).cuda()
-    x = tx[..., 1:].cuda()
+    t = tx[:, 0].cuda()
+    x = tx[:, 1:].cuda()
     # u(t, x)
     u = func(tx).cuda()
     # u(t, x + z)
@@ -76,7 +76,7 @@ def LHS_pde(func, tx):  # changed to let this use the pair (learnable_tree, bs_a
     N = num_ints ** (tx.shape[1] - 1)
     integral_dz = torch.empty_like(tx[:, 1:])
     for i in range(tx.shape[0]):
-        point = tx[i, ...]
+        point = tx[i, :]
         temp = method.integrate(lambda var: integrand(u_func, mu, sigma, lam, point, var),
                                           dim=tx.shape[1] - 1,
                                           N=N, integration_domain=domain, backend='torch')
@@ -95,11 +95,11 @@ def RHS_pde(tx):
     lam = .3
     epsilon = 0
     theta = .3
-    return lam * mu ** 2 + theta ** 2 + epsilon * torch.linalg.norm(tx[..., 1:], dim=1)
+    return lam * mu ** 2 + theta ** 2 + epsilon * torch.linalg.norm(tx[:, 1:], dim=1)
 
 
 def true_solution(tx):  # for the most simple case, u(t,x) = ||x||^2
-    return torch.linalg.norm(tx[..., 1:], dim=1)
+    return torch.linalg.norm(tx[:, 1:], dim=1)
 
 
 unary_functions = [lambda x: 0 * x ** 2,
