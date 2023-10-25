@@ -1,7 +1,7 @@
 import numpy as np
 import torch
 from torch import sin, cos, exp
-from torchquad import Simpson, set_up_backend
+from torchquad import Trapezoid, set_up_backend
 import math
 
 
@@ -47,7 +47,7 @@ def LHS_pde(func, tx):  # changed to let this use the pair (learnable_tree, bs_a
     # parameters for integration (done by Torchquad)
     num_ints = 3  # number of intervals to break up each dimension of x by
     domain = torch.tensor([[0, 1]] * (tx.shape[1] - 1)).cuda()  # integrating on [0,1] on each dim of x
-    method = Simpson()
+    method = Trapezoid()
     set_up_backend("torch", data_type="float32")
 
     if type(func) is tuple:
@@ -84,7 +84,6 @@ def LHS_pde(func, tx):  # changed to let this use the pair (learnable_tree, bs_a
         integral_dz[i] = method.integrate(lambda var: integrand(u_func, mu, sigma, lam, point, var),
                                           dim=tx.shape[1] - 1,
                                           N=N, integration_domain=domain, backend='torch')
-    integral_dz = integrand(func)
     return ut + epsilon / 2 * torch.dot(x, ux) + 1 / 2 * theta ** 2 * trace_hessian + integral_dz
 
 
