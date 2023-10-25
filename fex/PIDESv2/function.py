@@ -46,7 +46,8 @@ def LHS_pde(func, tx):  # changed to let this use the pair (learnable_tree, bs_a
     epsilon = 0
     # parameters for integration (done by Torchquad)
     num_ints = 3  # number of intervals to break up each dimension of x by
-    domain = torch.tensor([[0, 1]] * (tx.shape[1] - 1)).cuda()  # integrating on [0,1] on each dim of x
+    domain = torch.tensor([[0, 1]] * (tx.shape[1] - 1), dtype=torch.float32).cuda()  # integrating on [0,1] on each dim of x
+    domain.float()
     method = MonteCarlo()
     set_up_backend("torch", data_type="float32")
 
