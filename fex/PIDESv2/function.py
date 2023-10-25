@@ -1,7 +1,7 @@
 import numpy as np
 import torch
 from torch import sin, cos, exp
-from torchquad import MonteCarlo, set_up_backend
+from torchquad import Trapezoid, set_up_backend
 import math
 
 
@@ -48,7 +48,7 @@ def LHS_pde(func, tx):  # changed to let this use the pair (learnable_tree, bs_a
     num_ints = 3  # number of intervals to break up each dimension of x by
     domain = torch.tensor([[0, 1]] * (tx.shape[1] - 1), dtype=torch.float32).cuda()  # integrating on [0,1] on each dim of x
     domain.float()
-    method = MonteCarlo()
+    method = Trapezoid()
     set_up_backend("torch", data_type="float32")
 
     if type(func) is tuple:
