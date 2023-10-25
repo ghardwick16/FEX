@@ -77,6 +77,7 @@ def LHS_pde(func, tx):  # changed to let this use the pair (learnable_tree, bs_a
     integral_dz = torch.empty(tx.shape[0])
     for i in range(tx.shape[0]):
         point = tx[i, :]
+        print(u_func(point))
         temp = method.integrate(lambda var: integrand(u_func, mu, sigma, lam, point, var), dim=tx.shape[1] - 1,
                                 N=N, integration_domain=domain, backend='torch')
         print(temp)
