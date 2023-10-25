@@ -70,6 +70,7 @@ def LHS_pde(func, tx):  # changed to let this use the pair (learnable_tree, bs_a
         ddu = torch.autograd.grad(du, tx, grad_outputs=torch.ones_like(du), create_graph=True)
     else:
         ddu = torch.zeros_like(du)
+    print(ddu)
     trace_hessian = torch.sum(ddu[:, 1:], dim=1)
 
     # take the integral
