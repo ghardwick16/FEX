@@ -1,7 +1,7 @@
 import numpy as np
 import torch
 from torch import sin, cos, exp
-import torchquad
+from torchquad import Simpson, set_up_backend
 import math
 
 
@@ -57,20 +57,20 @@ def LHS_pde(func, tx):  # changed to let this use the pair (learnable_tree, bs_a
     else:
         u_func = lambda y: func(y)
 
-    t = torch.squeeze(tx[..., 0]).cuda()
-    x = torch.squeeze(tx[..., 1:]).cuda()
+    t = torch.squeeze(tx[:, 0]).cuda()
+    x = torch.squeeze(tx[:, 1:]).cuda()
     u = u_func(tx)
 
     # get derivatives, ut, ux, and trace of hessian
     v = torch.ones(u.shape).cuda()
     du = torch.autograd.grad(u, tx, grad_outputs=v, create_graph=True)[0]
-    ut = du[..., 0]
-    ux = du[..., 1:]
+    ut = du[:, 0]
+    ux = du[:, 1:]
     if du.requires_grad:
         ddu = torch.autograd.grad(du, tx, grad_outputs=torch.ones_like(du), create_graph=True)
     else:
         ddu = torch.zeros_like(du)
-    trace_hessian = torch.sum(ddu[..., 1:], dim=1)
+    trace_hessian = torch.sum(ddu[:, 1:], dim=1)
 
     # take the integral
     N = num_ints ** (tx.shape[1] - 1)
@@ -94,7 +94,7 @@ def RHS_pde(tx):
     return lam * mu ** 2 + theta ** 2 + epsilon * torch.linalg.norm(tx[..., 1:], dim=1)
 
 
-def true_solution(tx):  # for the most simple case, u(t,x) = x
+def true_solution(tx):  # for the most simple case, u(t,x) = ||x||^2
     return torch.linalg.norm(tx[..., 1:], dim=1)
 
 
