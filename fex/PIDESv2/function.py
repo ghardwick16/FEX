@@ -57,7 +57,7 @@ def LHS_pde(func, tx):  # changed to let this use the pair (learnable_tree, bs_a
     theta = .3
     epsilon = 0
     domain = torch.tensor([[0, 1]] * (tx.shape[1] - 1)).cuda()  # integrating on [0,1] on each dim of x
-
+    tx = tx.cuda()
     if type(func) is tuple:
         learnable_tree = func[0]
         bs_action = func[1]
@@ -65,8 +65,8 @@ def LHS_pde(func, tx):  # changed to let this use the pair (learnable_tree, bs_a
     else:
         u_func = lambda y: func(y)
 
-    t = torch.squeeze(tx[:, 0]).cuda()
-    x = torch.squeeze(tx[:, 1:]).cuda()
+    t = torch.squeeze(tx[:, 0])
+    x = torch.squeeze(tx[:, 1:])
     u = u_func(tx)
 
     # get derivatives, ut, ux, and trace of hessian
@@ -77,15 +77,19 @@ def LHS_pde(func, tx):  # changed to let this use the pair (learnable_tree, bs_a
     if du.requires_grad:
         ddu = torch.autograd.grad(du, tx, grad_outputs=torch.ones_like(du), create_graph=True)[0]
     else:
-        ddu = torch.zeros_like(du)
+        ddu = torch.zeros_like(du).cuda()
     trace_hessian = torch.sum(ddu[:, 1:], dim=1)
 
     # take the integral
-    integral_dz = torch.empty(tx.shape[0])
+    integral_dz = torch.empty(tx.shape[0]).cuda()
     int_fun = lambda var: integrand(u_func, mu, sigma, lam, point, var)
     for i in range(tx.shape[0]):
         point = tx[i, :]
         integral_dz[i] = montecarlo_integration(int_fun, domain=domain, num_samples=50)
+    print(ut.is_cuda)
+    print(x.is_cuda)
+    print(ux.is_cuda)
+    print(integral_dz.is_cuda()
     return ut + epsilon / 2 * torch.sum(x * ux, dim=1) + 1 / 2 * theta ** 2 * trace_hessian + integral_dz
 
 
