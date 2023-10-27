@@ -13,7 +13,7 @@ def montecarlo_integration(function, domain, num_samples):
     return vol / num_samples * torch.sum(function(points))
 
 
-def integrand(func, mu, sigma, lam, tx, z):
+def integrand(func, u, du, mu, sigma, lam, tx, z):
     ### We have two cases:  either we pass in the candidate function in the form
     ### (learnable_tree, bs_action) or the true function (for measuring performance)
     tx = tx.cuda()
@@ -21,9 +21,6 @@ def integrand(func, mu, sigma, lam, tx, z):
 
     t = tx[..., 0]
     x = tx[..., 1:]
-
-    # u(t, x)
-    u = func(tx)
     # u(t, x + z)
     if len(z.shape) > 1:
         tx_shift = torch.empty((z.shape[0], tx.shape[0])).cuda()
@@ -36,8 +33,7 @@ def integrand(func, mu, sigma, lam, tx, z):
         tx_shift[1:] = x + z
     u_shift = func(tx_shift)
     # z dot grad u
-    grad_u = torch.autograd.grad(u, tx, grad_outputs=torch.ones_like(u), create_graph=True)[0][1:].cuda()
-    dot_prod = torch.sum(z * grad_u, dim=1)
+    dot_prod = torch.sum(z * du[:, 1:], dim=1)
     # nu
     # nu = lam/torch.sqrt(2*torch.Tensor([math.pi])*sigma)*torch.exp(-.5*((z-mu)/sigma)**2)
     # print(nu)
@@ -77,7 +73,7 @@ def LHS_pde(func, tx):  # changed to let this use the pair (learnable_tree, bs_a
 
     # take the integral
     integral_dz = torch.empty(tx.shape[0]).cuda()
-    int_fun = lambda var: integrand(u_func, mu, sigma, lam, point, var)
+    int_fun = lambda var: integrand(u_func, u, du, mu, sigma, lam, point, var)
     for i in range(tx.shape[0]):
         point = tx[i, :]
         integral_dz[i] = montecarlo_integration(int_fun, domain=domain, num_samples=50)
