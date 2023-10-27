@@ -86,9 +86,7 @@ def LHS_pde(func, tx):  # changed to let this use the pair (learnable_tree, bs_a
     for i in range(tx.shape[0]):
         point = tx[i, :]
         integral_dz[i] = montecarlo_integration(int_fun, domain=domain, num_samples=50)
-    print(x.shape)
-    print(ux.shape)
-    return ut + epsilon / 2 * torch.dot(x, ux) + 1 / 2 * theta ** 2 * trace_hessian + integral_dz
+    return ut + epsilon / 2 * torch.sum(x * ux, dim=1) + 1 / 2 * theta ** 2 * trace_hessian + integral_dz
 
 
 def RHS_pde(tx):
