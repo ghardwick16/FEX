@@ -33,7 +33,7 @@ def integrand(func, u, du, mu, sigma, lam, tx, z):
         tx_shift[1:] = x + z
     u_shift = func(tx_shift)
     # z dot grad u
-    dot_prod = torch.sum(z * du[:, 1:], dim=1)
+    dot_prod = torch.sum(z * du.expand(z.shape[0], du.shape[1]), dim=1)
     # nu
     # nu = lam/torch.sqrt(2*torch.Tensor([math.pi])*sigma)*torch.exp(-.5*((z-mu)/sigma)**2)
     # print(nu)
@@ -73,9 +73,9 @@ def LHS_pde(func, tx):  # changed to let this use the pair (learnable_tree, bs_a
 
     # take the integral
     integral_dz = torch.empty(tx.shape[0]).cuda()
-    int_fun = lambda var: integrand(u_func, u, du, mu, sigma, lam, point, var)
     for i in range(tx.shape[0]):
         point = tx[i, :]
+        int_fun = lambda var: integrand(u_func, u, du[i,:], mu, sigma, lam, point, var)
         integral_dz[i] = montecarlo_integration(int_fun, domain=domain, num_samples=50)
     return ut + epsilon / 2 * torch.sum(x * ux, dim=1) + 1 / 2 * theta ** 2 * trace_hessian + integral_dz
 
