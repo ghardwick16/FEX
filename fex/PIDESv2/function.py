@@ -89,7 +89,7 @@ def LHS_pde(func, tx):  # changed to let this use the pair (learnable_tree, bs_a
     print(ut.is_cuda)
     print(x.is_cuda)
     print(ux.is_cuda)
-    print(integral_dz.is_cuda()
+    print(integral_dz.is_cuda)
     return ut + epsilon / 2 * torch.sum(x * ux, dim=1) + 1 / 2 * theta ** 2 * trace_hessian + integral_dz
 
 
