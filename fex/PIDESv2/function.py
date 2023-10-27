@@ -75,7 +75,7 @@ def LHS_pde(func, tx):  # changed to let this use the pair (learnable_tree, bs_a
     integral_dz = torch.empty(tx.shape[0]).cuda()
     for i in range(tx.shape[0]):
         point = tx[i, :]
-        int_fun = lambda var: integrand(u_func, u, du[i,:], mu, sigma, lam, point, var)
+        int_fun = lambda var: integrand(u_func, u[i,:], du[i,:], mu, sigma, lam, point, var)
         integral_dz[i] = montecarlo_integration(int_fun, domain=domain, num_samples=50)
     return ut + epsilon / 2 * torch.sum(x * ux, dim=1) + 1 / 2 * theta ** 2 * trace_hessian + integral_dz
 
