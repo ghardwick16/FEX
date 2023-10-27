@@ -19,8 +19,8 @@ def integrand(func, mu, sigma, lam, tx, z):
     tx = tx.cuda()
     z = z.cuda()
 
-    t = tx[:, 0]
-    x = tx[:, 1:]
+    t = tx[..., 0]
+    x = tx[..., 1:]
 
     # u(t, x)
     u = func(tx)
