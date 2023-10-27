@@ -33,7 +33,7 @@ def integrand(func, u, du, mu, sigma, lam, tx, z):
         tx_shift[1:] = x + z
     u_shift = func(tx_shift)
     # z dot grad u
-    dot_prod = torch.sum(z * du.expand(z.shape[0], du.shape[1]), dim=1)
+    dot_prod = torch.sum(z * du.expand(z.shape[0], du.shape[0]), dim=1)
     # nu
     # nu = lam/torch.sqrt(2*torch.Tensor([math.pi])*sigma)*torch.exp(-.5*((z-mu)/sigma)**2)
     # print(nu)
