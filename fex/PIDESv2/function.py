@@ -14,23 +14,15 @@ def montecarlo_integration(function, domain, num_samples):
 
 
 def integrand(func, u, du, mu, sigma, lam, tx, z):
-    ### We have two cases:  either we pass in the candidate function in the form
-    ### (learnable_tree, bs_action) or the true function (for measuring performance)
     tx = tx.cuda()
     z = z.cuda()
 
     t = tx[..., 0]
     x = tx[..., 1:]
     # u(t, x + z)
-    if len(z.shape) > 1:
-        tx_shift = torch.empty((z.shape[0], tx.shape[0])).cuda()
-        for i in range(z.shape[0]):
-            tx_shift[i, 0] = t
-            tx_shift[i, 1:] = x + z[i, :]
-    else:
-        tx_shift = torch.empty_like(tx).cuda()
-        tx_shift[0] = t
-        tx_shift[1:] = x + z
+    tx_shift = torch.empty((z.shape[0], tx.shape[0])).cuda()
+    tx_shift[:, 0] = t.expand(z.shape[0], t.shape[0])
+    tx_shift[:, 1:] = x.expand(z.shape[0], x.shape[0]) + z
     u_shift = func(tx_shift)
     # z dot grad u
     dot_prod = torch.sum(z * du[1:].expand(z.shape[0], du[1:].shape[0]), dim=1)
