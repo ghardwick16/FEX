@@ -37,12 +37,7 @@ def integrand(func, mu, sigma, lam, tx, z):
     u_shift = func(tx_shift)
     # z dot grad u
     grad_u = torch.autograd.grad(u, tx, grad_outputs=torch.ones_like(u), create_graph=True)[0][1:].cuda()
-    dot_prod = torch.empty(z.shape[0]).cuda()
-    if len(z.shape) > 1:
-        for i in range(z.shape[0]):
-            dot_prod[i] = torch.dot(z[i, :].float(), grad_u)
-    else:
-        dot_prod = torch.dot(z.float(), grad_u)
+    dot_prod = torch.sum(z * grad_u, dim=1)
     # nu
     # nu = lam/torch.sqrt(2*torch.Tensor([math.pi])*sigma)*torch.exp(-.5*((z-mu)/sigma)**2)
     # print(nu)
