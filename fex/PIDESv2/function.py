@@ -79,11 +79,11 @@ def RHS_pde(tx):
     lam = .3
     epsilon = 0
     theta = .3
-    return lam * mu ** 2 + theta ** 2 + epsilon * torch.linalg.norm(tx[:, 1:], dim=1)
+    return lam * mu ** 2 + theta ** 2 + epsilon/(tx.shape[1]-1) * torch.linalg.norm(tx[:, 1:], dim=1)**2
 
 
 def true_solution(tx):  # for the most simple case, u(t,x) = ||x||^2
-    return torch.linalg.norm(tx[:, 1:], dim=1)
+    return torch.linalg.norm(tx[:, 1:], dim=1)**2
 
 
 unary_functions = [lambda x: 0 * x ** 2,
