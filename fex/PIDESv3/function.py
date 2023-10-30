@@ -54,7 +54,7 @@ def LHS_pde(func, tx):  # changed to let this use the pair (learnable_tree, bs_a
 def RHS_pde(tx):
     #  parameters for the RHS:
     epsilon = .25
-    return epsilon * tx[:, 1:]
+    return epsilon * torch.squeeze(tx[:, 1:])
 
 
 

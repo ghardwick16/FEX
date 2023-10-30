@@ -591,9 +591,7 @@ def get_reward(bs, actions, learnable_tree, tree_params, tree_optim):
 
             # changing LHS_pde function to simply take the learnable tree directly for ease of computation of the
             # integral
-            print(torch.squeeze(func.LHS_pde(lhs_func, x)).shape)
-            print(func.RHS_pde(x).shape)
-            function_error = torch.nn.functional.mse_loss(torch.squeeze(func.LHS_pde(lhs_func, x)), func.RHS_pde(x))
+            function_error = torch.nn.functional.mse_loss(func.LHS_pde(lhs_func, x), func.RHS_pde(x))
             loss = function_error + 100*bd_error
             tree_optim.zero_grad()
             loss.backward()
@@ -610,7 +608,7 @@ def get_reward(bs, actions, learnable_tree, tree_params, tree_optim):
             bc_true = func.true_solution(bd_pts)
             bd_nn = learnable_tree(bd_pts, bs_action)
             bd_error = torch.nn.functional.mse_loss(bc_true, bd_nn)
-            function_error = torch.nn.functional.mse_loss(torch.squeeze(func.LHS_pde(lhs_func, x)), func.RHS_pde(x))
+            function_error = torch.nn.functional.mse_loss(func.LHS_pde(lhs_func, x), func.RHS_pde(x))
             loss = function_error + 100*bd_error
             print('loss before: ', loss.item())
             error_hist.append(loss.item())
@@ -620,7 +618,7 @@ def get_reward(bs, actions, learnable_tree, tree_params, tree_optim):
         tree_optim.step(closure)
 
 
-        function_error = torch.nn.functional.mse_loss(torch.squeeze(func.LHS_pde(lhs_func, x)), func.RHS_pde(x))
+        function_error = torch.nn.functional.mse_loss(func.LHS_pde(lhs_func, x), func.RHS_pde(x))
         bd_pts = get_boundary(args.bdbs, dim)
         bc_true = func.true_solution(bd_pts)
         bd_nn = learnable_tree(bd_pts, bs_action)
@@ -664,7 +662,7 @@ def best_error(best_action, learnable_tree):
     bc_true = func.true_solution(bd_pts)
     bd_nn = learnable_tree(bd_pts, bs_action)
     bd_error = torch.nn.functional.mse_loss(bc_true, bd_nn)
-    function_error = torch.nn.functional.mse_loss(torch.squeeze(func.LHS_pde(lhs_func, x)), func.RHS_pde(x))
+    function_error = torch.nn.functional.mse_loss(func.LHS_pde(lhs_func, x), func.RHS_pde(x))
     regression_error = function_error + 100 * bd_error
 
     print('bd error: {}  '.format(bd_error.item()), ' eigen: {} '.format(function_error.item()))
