@@ -49,7 +49,7 @@ def LHS_pde(func, tx):  # changed to let this use the pair (learnable_tree, bs_a
         integrand[i, :] = torch.mul(torch.squeeze(u_expz[i, :]) - u[i] - x[i] * (exp_z - 1) * ux[i], nu)
     integral_dz = torch.trapezoid(integrand, z, dim=1)
 
-    return ut + epsilon * torch.dot(x, ux) + integral_dz
+    return ut + epsilon * x * ux + integral_dz
 
 def RHS_pde(tx):
     #  parameters for the RHS:
