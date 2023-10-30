@@ -34,7 +34,7 @@ def LHS_pde(func, tx):  # changed to let this use the pair (learnable_tree, bs_a
     v = torch.ones(u.shape).cuda()
     du = torch.autograd.grad(u, tx, grad_outputs=v, create_graph=True)[0]
     ut = du[:, 0]
-    ux = du[:, 1:]
+    ux = torch.squeeze(du[:, 1:])
     print(ux.shape)
     print(x.shape)
     # commented out the second derivatives - since theta = 0 they don't actually get used so faster to not compute them
