@@ -4,6 +4,7 @@ from torch import sin, cos, exp
 import math
 
 
+# basic montecarlo integrator for higher dims
 def montecarlo_integration(function, domain, num_samples):
     points = torch.empty((num_samples, len(domain)))
     vol = 0
@@ -11,6 +12,18 @@ def montecarlo_integration(function, domain, num_samples):
         vol *= (domain[i][1] - domain[i][0])
         points[:, i] = torch.rand(num_samples).cuda() * (domain[i][1] - domain[i][0]) + domain[i][0]
     return vol / num_samples * torch.sum(function(points))
+
+# basic trapezoid rule integrator for 2-d case
+def twod_trap(func, num_ints):
+    vals = torch.empty(num_ints, num_ints)
+    for i in range(num_ints):
+        for j in range(num_ints):
+            vals[i, j] = func(torch.tensor([i, j]) * 1 / (num_ints - 1))
+    # int w.r.t. first space dim:
+    integral_dx = torch.trapezoid(vals, dx=1 / (num_ints - 1), dim=0)
+    # int w.r.t. the second space dim:
+    integral_dy = torch.trapezoid(integral_dx, dx=1 / (num_ints - 1), dim=0)
+    return integral_dy
 
 
 def integrand(func, u, du, mu, sigma, lam, tx, z):
@@ -29,7 +42,7 @@ def integrand(func, u, du, mu, sigma, lam, tx, z):
     # nu
     # nu = lam/torch.sqrt(2*torch.Tensor([math.pi])*sigma)*torch.exp(-.5*((z-mu)/sigma)**2)
     # print(nu)
-    return (u_shift - u.expand(u_shift.shape[0], u.shape[0]) - dot_prod)*lam
+    return (u_shift - u.expand(u_shift.shape[0], u.shape[0]) - dot_prod) * lam
 
 
 def LHS_pde(func, tx):  # changed to let this use the pair (learnable_tree, bs_action) for computation directly
@@ -67,8 +80,8 @@ def LHS_pde(func, tx):  # changed to let this use the pair (learnable_tree, bs_a
     integral_dz = torch.empty(tx.shape[0]).cuda()
     for i in range(tx.shape[0]):
         point = tx[i, :]
-        int_fun = lambda var: integrand(u_func, u[i,:], du[i,:], mu, sigma, lam, point, var)
-        integral_dz[i] = montecarlo_integration(int_fun, domain=domain, num_samples=50)
+        int_fun = lambda var: integrand(u_func, u[i, :], du[i, :], mu, sigma, lam, point, var)
+        integral_dz[i] = twod_trap(int_fun, num_ints=5)
     return ut + epsilon / 2 * torch.sum(x * ux, dim=1) + 1 / 2 * theta ** 2 * trace_hessian + integral_dz
 
 
@@ -79,11 +92,11 @@ def RHS_pde(tx):
     lam = .3
     epsilon = 0
     theta = .3
-    return lam * mu ** 2 + theta ** 2 + epsilon/(tx.shape[1]-1) * torch.linalg.norm(tx[:, 1:], dim=1)**2
+    return lam * mu ** 2 + theta ** 2 + epsilon / (tx.shape[1] - 1) * torch.linalg.norm(tx[:, 1:], dim=1) ** 2
 
 
 def true_solution(tx):  # for the most simple case, u(t,x) = ||x||^2
-    return torch.linalg.norm(tx[:, 1:], dim=1)**2
+    return torch.linalg.norm(tx[:, 1:], dim=1) ** 2
 
 
 unary_functions = [lambda x: 0 * x ** 2,
