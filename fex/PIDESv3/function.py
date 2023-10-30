@@ -54,12 +54,12 @@ def LHS_pde(func, tx):  # changed to let this use the pair (learnable_tree, bs_a
 def RHS_pde(tx):
     #  parameters for the RHS:
     epsilon = .25
-    return epsilon * torch.squeeze(tx[:, 1:])
+    return epsilon * torch.squeeze(tx[:, 1:]).cuda()
 
 
 
 def true_solution(tx):  # for the most simple case, u(t,x) = x
-    return tx[:, 1:]
+    return tx[:, 1:].cuda()
 
 
 unary_functions = [lambda x: 0 * x ** 2,
