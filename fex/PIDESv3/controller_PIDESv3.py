@@ -591,6 +591,8 @@ def get_reward(bs, actions, learnable_tree, tree_params, tree_optim):
 
             # changing LHS_pde function to simply take the learnable tree directly for ease of computation of the
             # integral
+            print(torch.squeeze(func.LHS_pde(lhs_func, x)).shape)
+            print(func.RHS_pde(x).shape)
             function_error = torch.nn.functional.mse_loss(torch.squeeze(func.LHS_pde(lhs_func, x)), func.RHS_pde(x))
             loss = function_error + 100*bd_error
             tree_optim.zero_grad()
