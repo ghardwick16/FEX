@@ -30,12 +30,12 @@ def integrand(func, u, du, mu, sigma, lam, tx, z):
     tx = tx.cuda()
     z = z.cuda()
 
-    t = tx[..., 0]
-    x = tx[..., 1:]
+    t = tx[0]
+    x = tx[1:]
     # u(t, x + z)
     tx_shift = torch.empty_like(tx).cuda()
-    tx_shift[:, 0] = t
-    tx_shift[:, 1:] = x + z
+    tx_shift[0] = t
+    tx_shift[1:] = x + z
     u_shift = func(tx_shift)
     # z dot grad u
     dot_prod = torch.dot(z, du[1:])
