@@ -7,7 +7,7 @@ import math
 # basic montecarlo integrator for higher dims
 def montecarlo_integration(function, domain, num_samples):
     points = torch.empty((num_samples, len(domain)))
-    vol = 0
+    vol = 1
     for i in range(len(domain)):
         vol *= (domain[i][1] - domain[i][0])
         points[:, i] = torch.rand(num_samples).cuda() * (domain[i][1] - domain[i][0]) + domain[i][0]
@@ -33,17 +33,22 @@ def integrand(func, u, du, mu, sigma, lam, tx, z):
     t = tx[0]
     x = tx[1:]
     # u(t, x + z)
-    tx_shift = torch.empty_like(tx).cuda()
-    tx_shift[0] = t
-    tx_shift[1:] = x + z
+    tx_shift = torch.empty((z.shape[0], tx.shape[0])).cuda()
+    tx_shift[:, 0] = t
+    tx_shift[:, 1:] = x.expand(z.shape[0], x.shape[0]) + z
     u_shift = func(tx_shift)
     # z dot grad u
-    dot_prod = torch.dot(z, du[1:])
+    dot_prod = torch.sum(z * du[1:].expand(z.shape[0], du[1:].shape[0]), dim=1)
     # nu is a multivariable normal PDF with covariance sigma*I_d, mean mu.  As such, det(sigma*I_d) = (sigma^d)*1
-    nu = lam / torch.sqrt((2 * torch.Tensor([math.pi]).cuda() * sigma) ** z.shape[0]) * torch.exp(
-        -.5 * torch.dot(torch.matmul((z - mu), sigma ** -1 * torch.eye(z.shape[0]).cuda()), (z - mu)))
+    nu = torch.empty(z.shape[0]).cuda()
+    coef = lam/torch.sqrt((2 * torch.Tensor([math.pi]).cuda() * sigma) ** x.shape[0])
+    sig_inv = sigma ** -1 * torch.eye(x.shape[0]).cuda()
+    for i in range(z.shape[0]):
+      nu[i] = coef * torch.exp(
+          -.5 * torch.dot(torch.matmul((z[i] - mu), sig_inv), (z[i] - mu)))
     # print(nu)
-    return (u_shift - u - dot_prod) * nu
+    return (u_shift - u.expand(u_shift.shape[0], 1) - dot_prod) * nu
+
 
 
 def LHS_pde(func, tx):  # changed to let this use the pair (learnable_tree, bs_action) for computation directly
@@ -76,11 +81,12 @@ def LHS_pde(func, tx):  # changed to let this use the pair (learnable_tree, bs_a
     trace_hessian = torch.sum(ddu[:, 1:], dim=1)
 
     # take the integral
+    domain = torch.tensor([[0, 1]] * (tx.shape[1] - 1)).cuda()
     integral_dz = torch.empty(tx.shape[0]).cuda()
     for i in range(tx.shape[0]):
         point = tx[i, :]
         int_fun = lambda var: integrand(u_func, u[i, :], du[i, :], mu, sigma, lam, point, var)
-        integral_dz[i] = twod_trap(int_fun, num_ints=3)
+        integral_dz[i] = montecarlo_integration(int_fun, domain=domain, num_samples=25)
     # since epsilon is zero I just got rid of the eps*x dot grad u term
     return ut + 1 / 2 * theta ** 2 * trace_hessian + integral_dz
 
@@ -93,7 +99,7 @@ def RHS_pde(tx):
     epsilon = 0
     theta = .3
     # since epsilon is zero I just removed the eps*||x||^2 term
-    return torch.zeros(tx.shape[0]).cuda()*(lam * mu ** 2 + theta ** 2)
+    return torch.ones(tx.shape[0]).cuda()*(lam * mu ** 2 + theta ** 2)
 
 
 def true_solution(tx):  # for the most simple case, u(t,x) = ||x||^2
