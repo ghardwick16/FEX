@@ -40,7 +40,7 @@ def integrand(func, u, du, mu, sigma, lam, tx, z):
     # z dot grad u
     dot_prod = torch.sum(z * du[1:].expand(z.shape[0], du[1:].shape[0]), dim=1)
     # nu is a multivariable normal PDF with covariance sigma*I_d, mean mu.  As such, det(sigma*I_d) = (sigma^d)*1
-    nu = lam / torch.sqrt((2 * math.pi * sigma) ** z.shape[0]) * torch.exp(
+    nu = lam / torch.sqrt((2 * torch.Tensor([math.pi]).cuda() * sigma) ** z.shape[0]) * torch.exp(
         -.5 * torch.dot(torch.matmul((z - mu), sigma ** -1 * torch.eye(z.shape[0]).cuda()), (z - mu)))
     # print(nu)
     return (u_shift - u.expand(u_shift.shape[0], u.shape[0]) - dot_prod) * nu
