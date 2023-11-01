@@ -34,22 +34,19 @@ def riemann_integration_points(dims, grid_points, side):
 def integrand(func, u, du, mu, sigma, lam, tx, z):
     tx = tx.cuda()
     z = z.cuda()
-
-    t = tx[0]
-    x = tx[1:]
+    mu = torch.tensor([mu]).cuda()
+    sigma = torch.tensor([sigma]).cuda()
     # u(t, x + z)
-    tx_shift = torch.empty((z.shape[0], tx.shape[0])).cuda()
-    tx_shift[:, 0] = t
-    tx_shift[:, 1:] = x.expand(z.shape[0], x.shape[0]) + z
-    u_shift = func(tx_shift)
+    tx_large = tx.unsqueeze(0).repeat(z.shape[0], 1, 1).cuda()
+    z_large = z.unsqueeze(1).repeat(1, tx.shape[0], 1).cuda()
+    u_shift = func(tx_large[:, :, 1:] + z_large)
     # z dot grad u
-    dot_prod = torch.sum(z * du[1:].expand(z.shape[0], du[1:].shape[0]), dim=1)
+    dot_prod = torch.sum((du[:, 1:].unsqueeze(0).repeat(z.shape[0], 1, 1) * z_large), dim=-1)
     # nu is a multivariable normal PDF with covariance sigma*I_d, mean mu.  As such, det(sigma*I_d) = (sigma^d)*1
-    coef = lam / torch.sqrt((2 * torch.Tensor([math.pi]).cuda() * sigma) ** x.shape[0])
+    coef = lam / torch.sqrt((2 * torch.Tensor([math.pi]).cuda() * sigma) ** (tx.shape[1] - 1))
     z_minus_mu = z - mu
     nu = coef * torch.exp(-.5 * (sigma ** -1) * torch.sum(z_minus_mu * z_minus_mu, dim=1))
-    # print(nu)
-    return (u_shift - u.expand(u_shift.shape[0], 1) - dot_prod) * nu
+    return (u_shift - u.unsqueeze(0).repeat(z.shape[0], 1) - dot_prod) * nu.unsqueeze(1).repeat(1, tx.shape[0])
 
 
 def LHS_pde(func, tx):  # changed to let this use the pair (learnable_tree, bs_action) for computation directly
@@ -83,9 +80,7 @@ def LHS_pde(func, tx):  # changed to let this use the pair (learnable_tree, bs_a
 
     # take the integral
     points = riemann_integration_points(dims=tx.shape[1]-1, grid_points=6, side='left')
-    integral_dz = torch.empty(tx.shape[0]).cuda()
-    for i in range(tx.shape[0]):
-        integral_dz[i] = torch.sum(integrand(u_func, u[i, :], du[i, :], mu, sigma, lam, tx[i,:], points))*1/points.shape[0]
+    integral_dz = torch.sum(integrand(u_func, u, du, mu, sigma, lam, tx, points), dim=-1)*1/points.shape[0]
     # since epsilon is zero I just got rid of the eps*x dot grad u term
     return ut + 1 / 2 * theta ** 2 * trace_hessian + integral_dz
 
