@@ -53,7 +53,6 @@ def LHS_pde(func, tx):  # changed to let this use the pair (learnable_tree, bs_a
     lam = .3
     theta = .3
     epsilon = 0
-    domain = torch.tensor([[0, 1]] * (tx.shape[1] - 1)).cuda()  # integrating on [0,1] on each dim of x
     tx = tx.cuda()
     if type(func) is tuple:
         learnable_tree = func[0]
@@ -62,8 +61,6 @@ def LHS_pde(func, tx):  # changed to let this use the pair (learnable_tree, bs_a
     else:
         u_func = lambda y: func(y)
 
-    t = torch.squeeze(tx[:, 0])
-    x = torch.squeeze(tx[:, 1:])
     u = u_func(tx)
 
     # get derivatives, ut, ux, and trace of hessian
@@ -83,8 +80,8 @@ def LHS_pde(func, tx):  # changed to let this use the pair (learnable_tree, bs_a
     for i in range(tx.shape[0]):
         point = tx[i, :]
         int_fun = lambda var: integrand(u_func, u[i, :], du[i, :], mu, sigma, lam, point, var)
-        integral_dz[i] = twod_trap(int_fun, num_ints=5)
-    # since epsilon is zero I just got ride of the eps*x dot grad u term
+        integral_dz[i] = twod_trap(int_fun, num_ints=3)
+    # since epsilon is zero I just got rid of the eps*x dot grad u term
     return ut + 1 / 2 * theta ** 2 * trace_hessian + integral_dz
 
 
