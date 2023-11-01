@@ -39,16 +39,17 @@ def integrand(func, u, du, mu, sigma, lam, tx, z):
     u_shift = func(tx_shift)
     # z dot grad u
     dot_prod = torch.sum(z * du[1:].expand(z.shape[0], du[1:].shape[0]), dim=1)
-    # nu
-    # nu = lam/torch.sqrt(2*torch.Tensor([math.pi])*sigma)*torch.exp(-.5*((z-mu)/sigma)**2)
+    # nu is a multivariable normal PDF with covariance sigma*I_d, mean mu.  As such, det(sigma*I_d) = (sigma^d)*1
+    nu = lam / torch.sqrt((2 * torch.Tensor([math.pi]) * sigma) ** (tx.shape[1] - 1)) * torch.exp(
+        -.5 * torch.dot(torch.matmul((z - mu), sigma ** -1 * torch.eye(tx.shape[1] - 1)), (z - mu)))
     # print(nu)
-    return (u_shift - u.expand(u_shift.shape[0], u.shape[0]) - dot_prod) * lam
+    return (u_shift - u.expand(u_shift.shape[0], u.shape[0]) - dot_prod) * nu
 
 
 def LHS_pde(func, tx):  # changed to let this use the pair (learnable_tree, bs_action) for computation directly
     # parameters for the LHS
-    mu = .4
-    sigma = .25
+    mu = .1
+    sigma = 1e-4
     lam = .3
     theta = .3
     epsilon = 0
@@ -69,7 +70,8 @@ def LHS_pde(func, tx):  # changed to let this use the pair (learnable_tree, bs_a
     v = torch.ones(u.shape).cuda()
     du = torch.autograd.grad(u, tx, grad_outputs=v, create_graph=True)[0]
     ut = du[:, 0]
-    ux = du[:, 1:]
+    # ux = du[:, 1:]
+
     if du.requires_grad:
         ddu = torch.autograd.grad(du, tx, grad_outputs=torch.ones_like(du), create_graph=True)[0]
     else:
@@ -82,17 +84,19 @@ def LHS_pde(func, tx):  # changed to let this use the pair (learnable_tree, bs_a
         point = tx[i, :]
         int_fun = lambda var: integrand(u_func, u[i, :], du[i, :], mu, sigma, lam, point, var)
         integral_dz[i] = twod_trap(int_fun, num_ints=5)
-    return ut + epsilon / 2 * torch.sum(x * ux, dim=1) + 1 / 2 * theta ** 2 * trace_hessian + integral_dz
+    # since epsilon is zero I just got ride of the eps*x dot grad u term
+    return ut + 1 / 2 * theta ** 2 * trace_hessian + integral_dz
 
 
 def RHS_pde(tx):
     #  parameters for the RHS:
-    mu = .4
-    sigma = .25
+    mu = .1
+    sigma = 1e-4
     lam = .3
     epsilon = 0
     theta = .3
-    return lam * mu ** 2 + theta ** 2 + epsilon / (tx.shape[1] - 1) * torch.linalg.norm(tx[:, 1:], dim=1) ** 2
+    # since epsilon is zero I just removed the eps*||x||^2 term
+    return torch.zeros(tx.shape[0]).cuda()*(lam * mu ** 2 + theta ** 2)
 
 
 def true_solution(tx):  # for the most simple case, u(t,x) = ||x||^2
