@@ -43,7 +43,9 @@ def integrand(func, u, du, mu, sigma, lam, tx, z):
     nu = lam / torch.sqrt((2 * torch.Tensor([math.pi]).cuda() * sigma) ** z.shape[0]) * torch.exp(
         -.5 * torch.dot(torch.matmul((z - mu), sigma ** -1 * torch.eye(z.shape[0]).cuda()), (z - mu)))
     # print(nu)
-    print((u_shift - u.expand(u_shift.shape[0], u.shape[0]) - dot_prod) * nu)
+    print(u_shift)
+    print(u.expand(u_shift.shape[0], u.shape[0]))
+    print(dot_prod)
     return (u_shift - u.expand(u_shift.shape[0], u.shape[0]) - dot_prod) * nu
 
 
