@@ -19,21 +19,19 @@ def LHS_pde(func, tx): #changed to let this use the pair (learnable_tree, bs_act
     if type(func) is tuple:
         learnable_tree = func[0]
         bs_action = func[1]
-        u = learnable_tree(tx, bs_action).cuda()
-        u_expz = learnable_tree(tx_expz, bs_action).cuda()
+        u_func = lambda y: learnable_tree(y, bs_action)
+    else:
+        u_func = lambda y: func(y)
 
-    if type(func) is not tuple:
-        u = func(tx).cuda()
-        u_expz = func(tx_expz).cuda()
-
+    u = torch.squeeze(u_func(tx))
+    u_expz = torch.squeeze(u_func(tx_expz))
     v = torch.ones(u.shape).cuda()
     du = torch.autograd.grad(u, tx, grad_outputs=v, create_graph=True)[0]
     ut = du[:, 0].cuda()
     ux = du[:, 1].cuda()
-    integrand = torch.empty(tx.shape[0], num_traps).cuda()
     exp_z = torch.exp(z).cuda()
-    for i in range(u_expz.shape[0]):
-        integrand[i, :] = torch.mul(torch.squeeze(u_expz[i, :]) - u[i] - x[i] * (exp_z - 1) * ux[i], nu)
+    integrand = (u_expz - u.repeat(z.shape[0], 1).T - x.repeat(z.shape[0], 1).T * (
+                exp_z.repeat(tx.shape[0], 1) - 1) * ux.repeat(z.shape[0], 1).T) * nu.repeat(tx.shape[0], 1)
     integral_dz = torch.trapezoid(integrand, z, dim=1)
     return ut + integral_dz
 
