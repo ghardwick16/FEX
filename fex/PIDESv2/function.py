@@ -87,8 +87,8 @@ def LHS_pde(func, tx):  # changed to let this use the pair (learnable_tree, bs_a
 
 def RHS_pde(tx):
     #  parameters for the RHS:
-    mu = .1
-    sigma = 1e-4
+    mu = .5
+    sigma = .1
     lam = .3
     epsilon = 0
     theta = .3
