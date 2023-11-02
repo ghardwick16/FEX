@@ -43,12 +43,12 @@ def LHS_pde(func, tx):  # changed to let this use the pair (learnable_tree, bs_a
     #trace_hessian = torch.sum(ddu[:, 1:], dim=1)
 
     #integration
-    integrand = torch.empty(tx.shape[0], num_traps).cuda()
+    integrand1 = torch.empty(tx.shape[0], num_traps).cuda()
     exp_z = torch.exp(z).cuda()
     integrand = (u_expz - u.repeat(z.shape[0], 1).T - x.repeat(z.shape[0], 1).T * (exp_z.repeat(tx.shape[0], 1) - 1) * ux.repeat(z.shape[0], 1).T) * nu.repeat(tx.shape[0], 1)
-    print(integrand.shape)
     for i in range(u_expz.shape[0]):
-        integrand[i, :] = torch.mul(torch.squeeze(u_expz[i, :]) - u[i] - x[i] * (exp_z - 1) * ux[i], nu)
+        integrand1[i, :] = torch.mul(torch.squeeze(u_expz[i, :]) - u[i] - x[i] * (exp_z - 1) * ux[i], nu)
+    print(torch.sum(integrand - integrand1))
     integral_dz = torch.trapezoid(integrand, z, dim=1)
 
     return ut + epsilon * x * ux + integral_dz
