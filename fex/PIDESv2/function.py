@@ -50,6 +50,7 @@ def integrand(func, u, du, mu, sigma, lam, tx, z):
     coef = lam / torch.sqrt((2 * torch.Tensor([math.pi]).cuda() * sigma) ** (tx.shape[1] - 1))
     z_minus_mu = z - mu
     nu = coef * torch.exp(-.5 * (sigma ** -1) * torch.sum(z_minus_mu * z_minus_mu, dim=1))
+    print(u.shape)
     return (u_shift - u.unsqueeze(0).repeat(z.shape[0], 1) - dot_prod) * nu.unsqueeze(1).repeat(1, tx.shape[0])
 
 
