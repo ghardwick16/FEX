@@ -15,17 +15,13 @@ def montecarlo_integration(function, domain, num_samples):
 
 
 # pre-computes grid points for an n-dim riemann integration method
-def riemann_integration_points(dims, grid_points, side):
-    tics = torch.linspace(0, 1, steps=grid_points)
-    if side == 'right':
-        axis_pts = tics[1:]
-    if side == 'left':
-        axis_pts = tics[:-1]
+def riemann_integration_points(dims, grid_points):
+    tics = torch.linspace(-4 + .5*1/grid_points, 5 - .5*1/grid_points, steps=grid_points)
     tens_list = []
     for i in range(dims):
-        tens_list.append(axis_pts)
+        tens_list.append(tics)
     grid = torch.meshgrid(tens_list)
-    out_tens = torch.empty(((grid_points - 1) ** dims, dims))
+    out_tens = torch.empty(((grid_points) ** dims, dims))
     for i in range(len(grid)):
         out_tens[:, i] = torch.flatten(grid[i])
     return out_tens
@@ -55,8 +51,8 @@ def integrand(func, u, du, mu, sigma, lam, tx, z):
 
 def LHS_pde(func, tx):  # changed to let this use the pair (learnable_tree, bs_action) for computation directly
     # parameters for the LHS
-    mu = .1
-    sigma = 1e-4
+    mu = .5
+    sigma = .1
     lam = .3
     theta = .3
     epsilon = 0
@@ -83,7 +79,7 @@ def LHS_pde(func, tx):  # changed to let this use the pair (learnable_tree, bs_a
         hes_diag = torch.zeros_like(du).cuda()
     trace_hessian = torch.sum(hes_diag, dim=1)
     # take the integral
-    points = riemann_integration_points(dims=tx.shape[1]-1, grid_points=6, side='left')
+    points = riemann_integration_points(dims=tx.shape[1]-1, grid_points=10)
     integral_dz = torch.sum(integrand(u_func, u, du, mu, sigma, lam, tx, points), dim=0)*1/points.shape[0]
     # since epsilon is zero I just got rid of the eps*x dot grad u term
     return ut + 1 / 2 * theta ** 2 * trace_hessian + integral_dz
