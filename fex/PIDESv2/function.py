@@ -39,7 +39,11 @@ def integrand(func, u, du, mu, sigma, lam, tx, z):
     # u(t, x + z)
     tx_large = tx.unsqueeze(0).repeat(z.shape[0], 1, 1).cuda()
     z_large = z.unsqueeze(1).repeat(1, tx.shape[0], 1).cuda()
-    u_shift = func(tx_large[:, :, 1:] + z_large)
+    # had to flatten the input to the function to make it a 2d tensor of inputs ratherthan 3d.
+    input = torch.cat((torch.unsqueeze(tx_large[:, :, 0], 2), (tx_large[:, :, 1:] + z_large)), dim=-1).view(
+        tx.shape[0] * z.shape[0], tx.shape[1])
+    u_shift = func(input)
+    u_shift = u_shift.reshape(z.shape[0], tx.shape[0])  # reshaped the output to be of the shape that we expect for the integration step
     # z dot grad u
     dot_prod = torch.sum((du[:, 1:].unsqueeze(0).repeat(z.shape[0], 1, 1) * z_large), dim=-1)
     # nu is a multivariable normal PDF with covariance sigma*I_d, mean mu.  As such, det(sigma*I_d) = (sigma^d)*1
@@ -80,7 +84,7 @@ def LHS_pde(func, tx):  # changed to let this use the pair (learnable_tree, bs_a
 
     # take the integral
     points = riemann_integration_points(dims=tx.shape[1]-1, grid_points=6, side='left')
-    integral_dz = torch.sum(integrand(u_func, u, du, mu, sigma, lam, tx, points), dim=-1)*1/points.shape[0]
+    integral_dz = torch.sum(integrand(u_func, u, du, mu, sigma, lam, tx, points), dim=0)*1/points.shape[0]
     # since epsilon is zero I just got rid of the eps*x dot grad u term
     return ut + 1 / 2 * theta ** 2 * trace_hessian + integral_dz
 
