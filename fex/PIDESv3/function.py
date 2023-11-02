@@ -27,8 +27,8 @@ def LHS_pde(func, tx):  # changed to let this use the pair (learnable_tree, bs_a
     else:
         u_func = lambda y: func(y)
 
-    u = u_func(tx)
-    u_expz = u_func(tx_expz)
+    u = torch.squeeze(u_func(tx))
+    u_expz = torch.squeeze(u_func(tx_expz))
 
     # get derivatives
     v = torch.ones(u.shape).cuda()
@@ -46,8 +46,11 @@ def LHS_pde(func, tx):  # changed to let this use the pair (learnable_tree, bs_a
     integrand = torch.empty(tx.shape[0], num_traps).cuda()
     exp_z = torch.exp(z).cuda()
     print(u_expz.shape)
-    print(u.shape)
+    print(u.repeat(1, 5).shape)
+    print(x.repeat(1, 5).shape)
+    print(exp_z.repeat(tx.shape[0], 1).shape)
     print(ux.shape)
+    integrand = u_expz - u.repeat(1, 5) - x.repeat(1, 5) * (exp_z.repeat(tx.shape[0], 1) - 1) * ux
     for i in range(u_expz.shape[0]):
         integrand[i, :] = torch.mul(torch.squeeze(u_expz[i, :]) - u[i] - x[i] * (exp_z - 1) * ux[i], nu)
     integral_dz = torch.trapezoid(integrand, z, dim=1)
