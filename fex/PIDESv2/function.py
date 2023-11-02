@@ -75,13 +75,13 @@ def LHS_pde(func, tx):  # changed to let this use the pair (learnable_tree, bs_a
     du = torch.autograd.grad(u, tx, grad_outputs=v, create_graph=True)[0]
     ut = du[:, 0]
     # ux = du[:, 1:]
-
+    hes_diag = torch.empty((tx.shape[0], tx.shape[1] - 1)).cuda()
     if du.requires_grad:
-        ddu = torch.autograd.grad(du, tx, grad_outputs=torch.ones_like(du), create_graph=True)[0]
+        for i in range(tx.shape[1] - 1):
+            hes_diag[:, i] = theta ** 2 * torch.autograd.grad(du[:, 1 + i], tx, grad_outputs=torch.ones_like(u), create_graph=True)[0][:, 1 + i]
     else:
-        ddu = torch.zeros_like(du).cuda()
-    trace_hessian = torch.sum(ddu[:, 1:], dim=1)
-
+        hes_diag = torch.zeros_like(du).cuda()
+    trace_hessian = torch.sum(hes_diag, dim=1)
     # take the integral
     points = riemann_integration_points(dims=tx.shape[1]-1, grid_points=6, side='left')
     integral_dz = torch.sum(integrand(u_func, u, du, mu, sigma, lam, tx, points), dim=0)*1/points.shape[0]
