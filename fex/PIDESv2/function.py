@@ -50,9 +50,7 @@ def integrand(func, u, du, mu, sigma, lam, tx, z):
     coef = lam / torch.sqrt((2 * torch.Tensor([math.pi]).cuda() * sigma) ** (tx.shape[1] - 1))
     z_minus_mu = z - mu
     nu = coef * torch.exp(-.5 * (sigma ** -1) * torch.sum(z_minus_mu * z_minus_mu, dim=1))
-    new_u = torch.unsqueeze(torch.squeeze(u), 0).repeat(z.shape[0], 1)
-    print(new_u.shape)
-    return (u_shift - u.repeat(1, z.shape[0]) - dot_prod) * nu.unsqueeze(1).repeat(1, tx.shape[0])
+    return (u_shift - torch.unsqueeze(torch.squeeze(u), 0).repeat(z.shape[0], 1) - dot_prod) * nu.unsqueeze(1).repeat(1, tx.shape[0])
 
 
 def LHS_pde(func, tx):  # changed to let this use the pair (learnable_tree, bs_action) for computation directly
