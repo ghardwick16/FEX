@@ -81,7 +81,7 @@ def LHS_pde(func, tx):  # changed to let this use the pair (learnable_tree, bs_a
     trace_hessian = torch.sum(hes_diag, dim=1)
     # take the integral
     points = center_integration_points(dims=tx.shape[1]-1, grid_points=25, left=left, right=right)
-    integral_dz = torch.sum(integrand(u_func, u, du, mu, sigma, lam, tx, points), dim=0)*1/points.shape[0]
+    integral_dz = torch.sum(integrand(u_func, u, du, mu, sigma, lam, tx, points), dim=0)*((left - right)**(tx.shape[1]-1))/points.shape[0]
     # since epsilon is zero I just got rid of the eps*x dot grad u term
     return ut + 1 / 2 * trace_hessian + integral_dz
 
