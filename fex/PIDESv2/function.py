@@ -44,22 +44,18 @@ def integrand(func, u, du, mu, sigma, lam, tx, z):
     dot_prod = torch.sum((du[:, 1:].unsqueeze(0).repeat(z.shape[0], 1, 1) * z_large), dim=-1)
 
     # nu is a multivariable normal PDF with covariance sigma*I_d, mean mu.  As such, det(sigma*I_d) = (sigma^d)*1
-    #coef = lam / torch.sqrt((2 * torch.Tensor([math.pi]).cuda() * sigma) ** (tx.shape[1] - 1))
-    #z_minus_mu = z - mu
-    #nu = coef * torch.exp(-.5 * (sigma ** -1) * torch.sum(z_minus_mu * z_minus_mu, dim=1))
-    #return (u_shift - u.unsqueeze(0).repeat(z.shape[0], 1) - dot_prod) * nu.unsqueeze(1).repeat(1, tx.shape[0])
-
-    #Large Change - for simplicity, let nu be the PDF for a uniform random on [0,1]
-    return (u_shift - u.unsqueeze(0).repeat(z.shape[0], 1) - dot_prod) * lam
-
+    coef = lam / torch.sqrt((2 * torch.Tensor([math.pi]).cuda() * sigma) ** (tx.shape[1] - 1))
+    z_minus_mu = z - mu
+    nu = coef * torch.exp(-.5 * (sigma ** -1) * torch.sum(z_minus_mu * z_minus_mu, dim=1))
+    return (u_shift - u.unsqueeze(0).repeat(z.shape[0], 1) - dot_prod) * nu.unsqueeze(1).repeat(1, tx.shape[0])
 def LHS_pde(func, tx):  # changed to let this use the pair (learnable_tree, bs_action) for computation directly
     # parameters for the LHS
     mu = .5
     sigma = .1
     lam = .3
     theta = .3
-    left = 0
-    right = 1
+    left = -10
+    right = 11
     epsilon = 0
     tx = tx.cuda()
     if type(func) is tuple:
@@ -98,10 +94,7 @@ def RHS_pde(tx):
     epsilon = 0
     theta = .3
     # since epsilon is zero I just removed the eps/d*||x||^2 term
-    #return torch.ones(tx.shape[0]).cuda() * (lam *(mu ** 2 + sigma) + theta ** 2)
-
-    #Changed RHS to match nu = lam*(pdf of uniform)
-    return torch.ones(tx.shape[0]).cuda() * (lam/3 + theta ** 2)
+    return torch.ones(tx.shape[0]).cuda() * (lam *(mu ** 2 + sigma) + theta ** 2)
 
 def true_solution(tx):  # for the most simple case, u(t,x) = 1/d*||x||^2
     return (torch.sum(torch.pow(tx[..., 1:], 2), dim=-1))*1/(tx.shape[1]-1)
