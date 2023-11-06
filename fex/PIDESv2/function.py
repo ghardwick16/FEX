@@ -16,12 +16,13 @@ def montecarlo_integration(function, domain, num_samples):
 
 # pre-computes grid points for an n-dim riemann integration method
 def center_integration_points(dims, grid_points, left, right):
-    tics = torch.linspace(-left + .5*1/grid_points, right - .5*1/grid_points, steps=grid_points)
+    num_per_dim = int(grid_points**(1/dims))
+    tics = torch.linspace(left, right, steps=num_per_dim)
     tens_list = []
     for i in range(dims):
         tens_list.append(tics)
     grid = torch.meshgrid(tens_list)
-    out_tens = torch.empty(((grid_points) ** dims, dims))
+    out_tens = torch.empty((num_per_dim**dims, dims))
     for i in range(len(grid)):
         out_tens[:, i] = torch.flatten(grid[i])
     return out_tens
@@ -35,7 +36,7 @@ def integrand(func, u, du, mu, sigma, lam, tx, z):
     # u(t, x + z)
     tx_large = tx.unsqueeze(0).repeat(z.shape[0], 1, 1).cuda()
     z_large = z.unsqueeze(1).repeat(1, tx.shape[0], 1).cuda()
-    # had to flatten the input to the function to make it a 2d tensor of inputs ratherthan 3d.
+    # had to flatten the input to the function to make it a 2d tensor of inputs rather than 3d.
     input = torch.cat((torch.unsqueeze(tx_large[:, :, 0], 2), (tx_large[:, :, 1:] + z_large)), dim=-1).view(
         tx.shape[0] * z.shape[0], tx.shape[1])
     u_shift = func(input)
@@ -44,9 +45,9 @@ def integrand(func, u, du, mu, sigma, lam, tx, z):
     dot_prod = torch.sum((du[:, 1:].unsqueeze(0).repeat(z.shape[0], 1, 1) * z_large), dim=-1)
 
     # nu is a multivariable normal PDF with covariance sigma*I_d, mean mu.  As such, det(sigma*I_d) = (sigma^d)*1
-    coef = lam / torch.sqrt((2 * torch.Tensor([math.pi]).cuda() * sigma) ** (tx.shape[1] - 1))
+    coef = lam / ((torch.sqrt(2 * torch.Tensor([math.pi]).cuda()) * sigma) ** (tx.shape[1] - 1))
     z_minus_mu = z - mu
-    nu = coef * torch.exp(-.5 * (sigma ** -1) * torch.sum(z_minus_mu * z_minus_mu, dim=1))
+    nu = coef * torch.exp(-.5/sigma**2 * torch.sum(z_minus_mu**2, dim=1))
     return (u_shift - u.unsqueeze(0).repeat(z.shape[0], 1) - dot_prod) * nu.unsqueeze(1).repeat(1, tx.shape[0])
 def LHS_pde(func, tx):  # changed to let this use the pair (learnable_tree, bs_action) for computation directly
     # parameters for the LHS
@@ -54,8 +55,8 @@ def LHS_pde(func, tx):  # changed to let this use the pair (learnable_tree, bs_a
     sigma = .1
     lam = .3
     theta = .3
-    left = -10
-    right = 11
+    left = -1/2
+    right = 3/2
     epsilon = 0
     tx = tx.cuda()
     if type(func) is tuple:
@@ -80,7 +81,7 @@ def LHS_pde(func, tx):  # changed to let this use the pair (learnable_tree, bs_a
         hes_diag = torch.zeros_like(du).cuda()
     trace_hessian = torch.sum(hes_diag, dim=1)
     # take the integral
-    points = center_integration_points(dims=tx.shape[1]-1, grid_points=25, left=left, right=right)
+    points = center_integration_points(dims=tx.shape[1]-1, grid_points=100000, left=left, right=right)
     integral_dz = torch.sum(integrand(u_func, u, du, mu, sigma, lam, tx, points), dim=0)*((right - left)**(tx.shape[1]-1))/points.shape[0]
     # since epsilon is zero I just got rid of the eps*x dot grad u term
     return ut + 1 / 2 * trace_hessian + integral_dz
@@ -94,7 +95,7 @@ def RHS_pde(tx):
     epsilon = 0
     theta = .3
     # since epsilon is zero I just removed the eps/d*||x||^2 term
-    return torch.ones(tx.shape[0]).cuda() * (lam *(mu ** 2 + sigma) + theta ** 2)
+    return torch.ones(tx.shape[0]).cuda() * (lam *(mu ** 2 + sigma**2) + theta ** 2)
 
 def true_solution(tx):  # for the most simple case, u(t,x) = 1/d*||x||^2
     return (torch.sum(torch.pow(tx[..., 1:], 2), dim=-1))*1/(tx.shape[1]-1)
