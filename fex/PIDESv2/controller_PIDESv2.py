@@ -761,7 +761,7 @@ def train_controller(Controller, Controller_optim, trainable_tree, tree_params, 
 
 
         log = 'Step: {step}| Loss: {loss:.4f}| Action: {act} |Baseline: {base:.4f}| ' \
-              'Reward {re:.4f} | {error:.8f} {formula}'.format(loss=loss.item(), base=baseline, act=binary_code,
+              'Reward {re:.4f} | Error: {error:.8f} {formula}'.format(loss=loss.item(), base=baseline, act=binary_code,
                                                                re=(rewards).mean(), step=step, formula=best_formula,
                                                                error=smallest_error)
         print('********************************************************************************************************')
