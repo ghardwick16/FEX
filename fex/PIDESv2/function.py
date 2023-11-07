@@ -55,8 +55,8 @@ def LHS_pde(func, tx):  # changed to let this use the pair (learnable_tree, bs_a
     sigma = .1
     lam = .3
     theta = .3
-    left = -1/2
-    right = 3/2
+    left = 0
+    right = 1
     epsilon = 0
     tx = tx.cuda()
     if type(func) is tuple:
@@ -76,7 +76,7 @@ def LHS_pde(func, tx):  # changed to let this use the pair (learnable_tree, bs_a
     hes_diag = torch.empty((tx.shape[0], tx.shape[1] - 1)).cuda()
     if du.requires_grad:
         for i in range(tx.shape[1] - 1):
-            hes_diag[:, i] = theta ** 2 * torch.autograd.grad(du[:, 1 + i], tx, grad_outputs=torch.ones_like(u), create_graph=True)[0][:, 1 + i]
+            hes_diag[:, i] = torch.autograd.grad(du[:, 1 + i], tx, grad_outputs=torch.ones_like(u), create_graph=True)[0][:, 1 + i]
     else:
         hes_diag = torch.zeros_like(du).cuda()
     trace_hessian = torch.sum(hes_diag, dim=1)
@@ -84,7 +84,7 @@ def LHS_pde(func, tx):  # changed to let this use the pair (learnable_tree, bs_a
     points = center_integration_points(dims=tx.shape[1]-1, grid_points=1000, left=left, right=right)
     integral_dz = torch.sum(integrand(u_func, u, du, mu, sigma, lam, tx, points), dim=0)*((right - left)**(tx.shape[1]-1))/points.shape[0]
     # since epsilon is zero I just got rid of the eps*x dot grad u term
-    return ut + 1 / 2 * trace_hessian + integral_dz
+    return ut + 1 / 2 * theta**2 * trace_hessian + integral_dz
 
 
 def RHS_pde(tx):
@@ -95,7 +95,7 @@ def RHS_pde(tx):
     epsilon = 0
     theta = .3
     # since epsilon is zero I just removed the eps/d*||x||^2 term
-    return torch.ones(tx.shape[0]).cuda() * (lam *(mu ** 2 + sigma**2) + theta ** 2)
+    return torch.ones(tx.shape[0]).cuda() * (lam * (mu**2 + sigma**2) + theta ** 2)
 
 def true_solution(tx):  # for the most simple case, u(t,x) = 1/d*||x||^2
     return (torch.sum(torch.pow(tx[..., 1:], 2), dim=-1))*1/(tx.shape[1]-1)
@@ -107,9 +107,11 @@ unary_functions = [lambda x: 0 * x ** 2,
                    lambda x: x ** 2,
                    lambda x: x ** 3,
                    lambda x: x ** 4,
-                   torch.exp,
-                   torch.sin,
-                   torch.cos, ]
+                   # Commented out non power functions for experiment
+                   #torch.exp,
+                   #torch.sin,
+                   #torch.cos,
+                   ]
 
 binary_functions = [lambda x, y: x + y,
                     lambda x, y: x * y,
