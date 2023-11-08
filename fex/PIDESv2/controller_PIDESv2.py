@@ -630,7 +630,7 @@ def get_reward(bs, actions, learnable_tree, tree_params, tree_optim, lam):
 
         print(error_hist, ' min: ', min(error_hist))
         regression_errors.append(min(error_hist))
-        for p in learnable_tree.parameters():
+        for p in tree_params:
             print(p)
 
         count = 0
