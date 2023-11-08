@@ -625,6 +625,9 @@ def get_reward(bs, actions, learnable_tree, tree_params, tree_optim, lam):
 
         tree_optim.step(closure)
 
+        print(tree_params[-4:])
+        print(inorder_visualize(basic_tree(), bs_action, trainable_tree))
+
         function_error = torch.nn.functional.mse_loss(func.LHS_pde(lhs_func, x), func.RHS_pde(x))
         bd_pts = get_boundary(args.bdbs, dim)
         bc_true = func.true_solution(bd_pts)
