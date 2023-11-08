@@ -601,6 +601,7 @@ def get_reward(bs, actions, learnable_tree, tree_params, tree_optim, lam):
         print('---------------------------------- batch idx {} -------------------------------------'.format(bs_idx))
 
         error_hist = []
+        print(inorder_visualize(basic_tree(), bs_action, trainable_tree))
         def closure():
             tree_optim.zero_grad()
 
