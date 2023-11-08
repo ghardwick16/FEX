@@ -597,10 +597,11 @@ def get_reward(bs, actions, learnable_tree, tree_params, tree_optim, lam):
             loss.backward()
             tree_optim.step()
         # Going to try pruning some parameters to see if this helps
-        clip = .05
+        clip = .01
         for v in tree_params:
-            if abs(torch.sum(v.item())) < clip:
-                v == 0
+            if all(abs(val) < clip for val in v.item()):
+                v[:] = 0
+                v.requires_grad = False
         tree_optim = torch.optim.LBFGS(tree_params, lr=1, max_iter=20)
         print('---------------------------------- batch idx {} -------------------------------------'.format(bs_idx))
 
