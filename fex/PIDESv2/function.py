@@ -98,19 +98,18 @@ def RHS_pde(tx):
     return torch.ones(tx.shape[0]).cuda() * (lam * (mu**2 + sigma**2) + theta ** 2)
 
 def true_solution(tx):  # for the most simple case, u(t,x) = 1/d*||x||^2
-    return (torch.sum(torch.pow(tx[..., 1:], 2), dim=-1))*1/(tx.shape[1]-1)
+    return (torch.sum(tx[..., 1:]**2, dim=-1))*1/(tx.shape[1]-1)
 
 
 unary_functions = [lambda x: 0 * x ** 2,
                    lambda x: 1 + 0 * x ** 2,
                    lambda x: x + 0 * x ** 2,
                    lambda x: x ** 2,
-                   #lambda x: x ** 3,
-                   #lambda x: x ** 4,
-                   # Commented out non power functions for experiment
-                   #torch.exp,
-                   #torch.sin,
-                   #torch.cos,
+                   lambda x: x ** 3,
+                   lambda x: x ** 4,
+                   torch.exp,
+                   torch.sin,
+                   torch.cos,
                    ]
 
 binary_functions = [lambda x, y: x + y,
