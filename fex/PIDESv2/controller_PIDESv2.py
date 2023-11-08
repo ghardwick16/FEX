@@ -576,7 +576,7 @@ def get_reward(bs, actions, learnable_tree, tree_params, tree_optim, lam):
 
         reset_params(tree_params)
         tree_optim = torch.optim.Adam(tree_params, lr=0.1)
-        for _ in range(30):
+        for _ in range(20):
             tree_optim.zero_grad()
             bd_pts = get_boundary(args.bdbs, dim)
 
@@ -594,7 +594,6 @@ def get_reward(bs, actions, learnable_tree, tree_params, tree_optim, lam):
             function_error = torch.nn.functional.mse_loss(func.LHS_pde(lhs_func, x), func.RHS_pde(x))
             loss = function_error + lam*bd_error
             loss.backward()
-            print(f'loss during Adam:{loss}')
             tree_optim.step()
         tree_optim = torch.optim.LBFGS(tree_params, lr=1, max_iter=20)
         print('---------------------------------- batch idx {} -------------------------------------'.format(bs_idx))
@@ -620,6 +619,9 @@ def get_reward(bs, actions, learnable_tree, tree_params, tree_optim, lam):
             return loss
 
         tree_optim.step(closure)
+
+        print(tree_params)
+        print(inorder_visualize(basic_tree(), bs_action, trainable_tree))
 
         function_error = torch.nn.functional.mse_loss(func.LHS_pde(lhs_func, x), func.RHS_pde(x))
         bd_pts = get_boundary(args.bdbs, dim)
