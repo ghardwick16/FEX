@@ -599,7 +599,7 @@ def get_reward(bs, actions, learnable_tree, tree_params, tree_optim, lam):
         # Going to try pruning some parameters to see if this helps
         clip = .05
         for v in tree_params:
-            if abs(v) < clip:
+            if abs(v.item()) < clip:
                 v == 0
         tree_optim = torch.optim.LBFGS(tree_params, lr=1, max_iter=20)
         print('---------------------------------- batch idx {} -------------------------------------'.format(bs_idx))
