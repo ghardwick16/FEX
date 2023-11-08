@@ -600,7 +600,7 @@ def get_reward(bs, actions, learnable_tree, tree_params, tree_optim, lam):
         clip = .01
         for v in tree_params:
             print(v.item())
-            if abs(v.item) < clip:
+            if abs(v.item()) < clip:
                 v = 0
                 v.requires_grad = False
         tree_optim = torch.optim.LBFGS(tree_params, lr=1, max_iter=20)
