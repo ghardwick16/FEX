@@ -583,6 +583,7 @@ def get_reward(bs, actions, learnable_tree, tree_params, tree_optim, lam):
 
         reset_params(tree_params)
         tree_optim = torch.optim.Adam(tree_params, lr=0.1)
+        print(len(tree_params))
         for _ in range(20):
             bd_pts = get_boundary(args.bdbs, dim)
             bc_true = func.true_solution(bd_pts)
