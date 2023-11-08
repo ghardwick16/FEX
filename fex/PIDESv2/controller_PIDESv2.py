@@ -597,7 +597,7 @@ def get_reward(bs, actions, learnable_tree, tree_params, tree_optim, lam):
             loss.backward()
             tree_optim.step()
         print(inorder_visualize(basic_tree(), bs_action, trainable_tree))
-        tree_optim = torch.optim.LBFGS(tree_params, lr=1, max_iter=20)
+        tree_optim = torch.optim.LBFGS(tree_params, lr=1, max_iter=50)
         print('---------------------------------- batch idx {} -------------------------------------'.format(bs_idx))
 
         error_hist = []
