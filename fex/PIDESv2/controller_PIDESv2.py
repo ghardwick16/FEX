@@ -583,7 +583,6 @@ def get_reward(bs, actions, learnable_tree, tree_params, tree_optim, lam):
 
         reset_params(tree_params)
         tree_optim = torch.optim.Adam(tree_params, lr=0.001)
-        print(inorder_visualize(basic_tree(), bs_action, trainable_tree))
         for _ in range(20):
             bd_pts = get_boundary(args.bdbs, dim)
             bc_true = func.true_solution(bd_pts)
@@ -617,7 +616,6 @@ def get_reward(bs, actions, learnable_tree, tree_params, tree_optim, lam):
             return loss
 
         tree_optim.step(closure)
-        print(inorder_visualize(basic_tree(), bs_action, trainable_tree))
 
 
 
@@ -637,6 +635,7 @@ def get_reward(bs, actions, learnable_tree, tree_params, tree_optim, lam):
         count = 0
         leaves_cnt = 0
         formula = inorder_visualize(basic_tree(), bs_action, trainable_tree)
+        print(formula)
         count = 0
         leaves_cnt = 0
         formulas.append(formula)
