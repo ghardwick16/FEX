@@ -596,9 +596,8 @@ def get_reward(bs, actions, learnable_tree, tree_params, tree_optim):
             tree_optim.zero_grad()
             loss.backward()
             tree_optim.step()
-            print('blah')
 
-        tree_optim = torch.optim.LBFGS(tree_params, lr=1, max_iter=40)
+        tree_optim = torch.optim.LBFGS(tree_params, lr=1, max_iter=20)
         print('---------------------------------- batch idx {} -------------------------------------'.format(bs_idx))
 
         error_hist = []
@@ -615,8 +614,9 @@ def get_reward(bs, actions, learnable_tree, tree_params, tree_optim):
             error_hist.append(loss.item())
             loss.backward()
             return loss
-
+        print(tree_params)
         tree_optim.step(closure)
+        print(tree_params)
 
 
         function_error = torch.nn.functional.mse_loss(func.LHS_pde(lhs_func, x), func.RHS_pde(x))
