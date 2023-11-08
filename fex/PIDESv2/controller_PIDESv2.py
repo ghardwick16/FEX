@@ -587,17 +587,17 @@ def get_reward(bs, actions, learnable_tree, tree_params, tree_optim, lam):
             bd_pts = get_boundary(args.bdbs, dim)
             bc_true = func.true_solution(bd_pts)
             bd_nn = learnable_tree(bd_pts, bs_action)
-            bd_error = torch.nn.functional.mse_loss(bc_true, bd_nn)
+            bd_error = torch.nn.functional.l1_loss(bc_true, bd_nn)
 
             # changing LHS_pde function to simply take the learnable tree directly for ease of computation of the
             # integral
-            function_error = torch.nn.functional.mse_loss(func.LHS_pde(lhs_func, x), func.RHS_pde(x))
+            function_error = torch.nn.functional.l1_loss(func.LHS_pde(lhs_func, x), func.RHS_pde(x))
             loss = function_error + lam*bd_error
             tree_optim.zero_grad()
             loss.backward()
             tree_optim.step()
 
-        tree_optim = torch.optim.LBFGS(tree_params, lr=.5, max_iter=40)
+        tree_optim = torch.optim.LBFGS(tree_params, lr=1, max_iter=20)
         print('---------------------------------- batch idx {} -------------------------------------'.format(bs_idx))
 
         error_hist = []
@@ -619,11 +619,11 @@ def get_reward(bs, actions, learnable_tree, tree_params, tree_optim, lam):
 
 
 
-        function_error = torch.nn.functional.mse_loss(func.LHS_pde(lhs_func, x), func.RHS_pde(x))
+        function_error = torch.nn.functional.l1_loss(func.LHS_pde(lhs_func, x), func.RHS_pde(x))
         bd_pts = get_boundary(args.bdbs, dim)
         bc_true = func.true_solution(bd_pts)
         bd_nn = learnable_tree(bd_pts, bs_action)
-        bd_error = torch.nn.functional.mse_loss(bc_true, bd_nn)
+        bd_error = torch.nn.functional.l1_loss(bc_true, bd_nn)
         regression_error = function_error + lam*bd_error
         # print('loss after: ', regression_error.item())
         print('loss after, bd error: {}  '.format(bd_error.item()), ' eigen: {} '.format(function_error.item()))
@@ -674,7 +674,7 @@ def train_controller(Controller, Controller_optim, trainable_tree, tree_params, 
 
     # hyperparameter lam is used for L(u) computation, L(u) + ||function_err||^2 + lam||boundary_err||^2
     # was originally set to 100, I want to play around with it since that seems extremely high
-    lam = 1
+    lam = 100
 
     ### obtain a new file name ###
     file_name = os.path.join(hyperparams['checkpoint'], 'log{}.txt')
