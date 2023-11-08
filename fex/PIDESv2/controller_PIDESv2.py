@@ -576,9 +576,8 @@ def get_reward(bs, actions, learnable_tree, tree_params, tree_optim, lam):
 
         reset_params(tree_params)
         tree_optim = torch.optim.Adam(tree_params[-4:], lr=0.1)
-        inorder_visualize(basic_tree(), bs_action, trainable_tree)
-        print(tree_params[-4:])
-        print()
+
+
         for _ in range(20):
             tree_optim.zero_grad()
             bd_pts = get_boundary(args.bdbs, dim)
@@ -602,6 +601,9 @@ def get_reward(bs, actions, learnable_tree, tree_params, tree_optim, lam):
         print('---------------------------------- batch idx {} -------------------------------------'.format(bs_idx))
 
         error_hist = []
+
+        print(tree_params[-4:])
+        print(inorder_visualize(basic_tree(), bs_action, trainable_tree))
         def closure():
             tree_optim.zero_grad()
 
