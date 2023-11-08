@@ -675,7 +675,7 @@ def train_controller(Controller, Controller_optim, trainable_tree, tree_params, 
 
     # hyperparameter lam is used for L(u) computation, L(u) + ||function_err||^2 + lam||boundary_err||^2
     # was originally set to 100, I want to play around with it since that seems extremely high
-    lam = 100
+    lam = 1
 
     ### obtain a new file name ###
     file_name = os.path.join(hyperparams['checkpoint'], 'log{}.txt')
