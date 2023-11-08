@@ -582,7 +582,7 @@ def get_reward(bs, actions, learnable_tree, tree_params, tree_optim, lam):
         # regression_error = torch.nn.functional.mse_loss(learnable_tree(x, bs_action), func.true_solution(x))
 
         reset_params(tree_params)
-        tree_optim = torch.optim.Adam(tree_params, lr=0.001)
+        tree_optim = torch.optim.Adam(tree_params, lr=0.1)
         print(tree_params)
         for _ in range(20):
             bd_pts = get_boundary(args.bdbs, dim)
