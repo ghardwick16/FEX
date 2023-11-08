@@ -475,7 +475,6 @@ class learnable_compuatation_tree(nn.Module):
             self.linear.append(linear_module)
 
     def forward(self, x, bs_action):
-        # print(len(bs_action))
         global leaves_cnt
         leaves_cnt = 0
         function = lambda y: compute_by_tree(get_function_trainable_params(bs_action, self.learnable_operator_set), self.linear, y)
@@ -563,12 +562,6 @@ class Controller(torch.nn.Module):
 
 def get_reward(bs, actions, learnable_tree, tree_params, tree_optim, lam):
 
-    # x = (torch.rand(args.domainbs, dim).cuda())*(args.right-args.left)+args.left
-    t = torch.rand(args.domainbs, 1).cuda()
-    x1 = (torch.rand(args.domainbs, args.dim - 1).cuda()) * (args.right - args.left) + args.left
-    x = torch.cat((t, x1), 1)
-    x.requires_grad = True
-
     regression_errors = []
     formulas = []
     batch_size = bs
@@ -586,6 +579,12 @@ def get_reward(bs, actions, learnable_tree, tree_params, tree_optim, lam):
         print(len(tree_params))
         for _ in range(20):
             bd_pts = get_boundary(args.bdbs, dim)
+
+            t = torch.rand(args.domainbs, 1).cuda()
+            x1 = (torch.rand(args.domainbs, args.dim - 1).cuda()) * (args.right - args.left) + args.left
+            x = torch.cat((t, x1), 1)
+            x.requires_grad = True
+
             bc_true = func.true_solution(bd_pts)
             bd_nn = learnable_tree(bd_pts, bs_action)
             bd_error = torch.nn.functional.mse_loss(bc_true, bd_nn)
@@ -596,6 +595,7 @@ def get_reward(bs, actions, learnable_tree, tree_params, tree_optim, lam):
             loss = function_error + lam*bd_error
             tree_optim.zero_grad()
             loss.backward()
+            print(f'loss during Adam:{loss}')
             tree_optim.step()
         tree_optim = torch.optim.LBFGS(tree_params, lr=1, max_iter=20)
         print('---------------------------------- batch idx {} -------------------------------------'.format(bs_idx))
@@ -603,6 +603,11 @@ def get_reward(bs, actions, learnable_tree, tree_params, tree_optim, lam):
         error_hist = []
         def closure():
             tree_optim.zero_grad()
+
+            t = torch.rand(args.domainbs, 1).cuda()
+            x1 = (torch.rand(args.domainbs, args.dim - 1).cuda()) * (args.right - args.left) + args.left
+            x = torch.cat((t, x1), 1)
+            x.requires_grad = True
 
             bd_pts = get_boundary(args.bdbs, dim)
             bc_true = func.true_solution(bd_pts)
@@ -616,7 +621,6 @@ def get_reward(bs, actions, learnable_tree, tree_params, tree_optim, lam):
             return loss
 
         tree_optim.step(closure)
-
 
         function_error = torch.nn.functional.mse_loss(func.LHS_pde(lhs_func, x), func.RHS_pde(x))
         bd_pts = get_boundary(args.bdbs, dim)
