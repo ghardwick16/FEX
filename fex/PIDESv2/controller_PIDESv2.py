@@ -582,16 +582,16 @@ def get_reward(bs, actions, learnable_tree, tree_params, tree_optim, lam):
         # regression_error = torch.nn.functional.mse_loss(learnable_tree(x, bs_action), func.true_solution(x))
 
         reset_params(tree_params)
-        tree_optim = torch.optim.Adam(tree_params, lr=0.001)
+        tree_optim = torch.optim.Adam(tree_params, lr=0.01)
         for _ in range(20):
             bd_pts = get_boundary(args.bdbs, dim)
             bc_true = func.true_solution(bd_pts)
             bd_nn = learnable_tree(bd_pts, bs_action)
-            bd_error = torch.nn.functional.l1_loss(bc_true, bd_nn)
+            bd_error = torch.nn.functional.mse_loss(bc_true, bd_nn)
 
             # changing LHS_pde function to simply take the learnable tree directly for ease of computation of the
             # integral
-            function_error = torch.nn.functional.l1_loss(func.LHS_pde(lhs_func, x), func.RHS_pde(x))
+            function_error = torch.nn.functional.mse_loss(func.LHS_pde(lhs_func, x), func.RHS_pde(x))
             loss = function_error + lam*bd_error
             tree_optim.zero_grad()
             loss.backward()
@@ -619,11 +619,11 @@ def get_reward(bs, actions, learnable_tree, tree_params, tree_optim, lam):
 
 
 
-        function_error = torch.nn.functional.l1_loss(func.LHS_pde(lhs_func, x), func.RHS_pde(x))
+        function_error = torch.nn.functional.mse_loss(func.LHS_pde(lhs_func, x), func.RHS_pde(x))
         bd_pts = get_boundary(args.bdbs, dim)
         bc_true = func.true_solution(bd_pts)
         bd_nn = learnable_tree(bd_pts, bs_action)
-        bd_error = torch.nn.functional.l1_loss(bc_true, bd_nn)
+        bd_error = torch.nn.functional.mse_loss(bc_true, bd_nn)
         regression_error = function_error + lam*bd_error
         # print('loss after: ', regression_error.item())
         print('loss after, bd error: {}  '.format(bd_error.item()), ' eigen: {} '.format(function_error.item()))
