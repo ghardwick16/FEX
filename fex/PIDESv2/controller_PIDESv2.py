@@ -569,7 +569,6 @@ def get_reward(bs, actions, learnable_tree, tree_params, tree_optim, lam):
     x = torch.cat((t, x1), 1)
     x.requires_grad = True
 
-    # print(x)
     regression_errors = []
     formulas = []
     batch_size = bs
@@ -597,6 +596,7 @@ def get_reward(bs, actions, learnable_tree, tree_params, tree_optim, lam):
             tree_optim.zero_grad()
             loss.backward()
             tree_optim.step()
+        print(f'loss after adam: {loss}')
 
         tree_optim = torch.optim.LBFGS(tree_params, lr=1, max_iter=20)
         print('---------------------------------- batch idx {} -------------------------------------'.format(bs_idx))
@@ -645,9 +645,6 @@ def get_reward(bs, actions, learnable_tree, tree_params, tree_optim, lam):
 
 def discount(x, amount):
     return scipy.signal.lfilter([1], [1, -amount], x[::-1], axis=0)[::-1]
-
-def true(x):
-    return -0.5*(torch.sum(x**2, dim=1, keepdim=True))
 
 def best_error(best_action, learnable_tree, lam):
 
