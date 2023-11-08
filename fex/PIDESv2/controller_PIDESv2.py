@@ -599,7 +599,7 @@ def get_reward(bs, actions, learnable_tree, tree_params, tree_optim, lam):
         # Going to try pruning some parameters to see if this helps
         clip = .01
         for v in tree_params:
-            print(v.item())
+            print(v)
             if abs(v.item()) < clip:
                 v = 0
                 v.requires_grad = False
