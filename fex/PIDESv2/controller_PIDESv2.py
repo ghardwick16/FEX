@@ -560,7 +560,7 @@ class Controller(torch.nn.Module):
         return (tools.get_variable(zeros, True, requires_grad=False),
                 tools.get_variable(zeros.clone(), True, requires_grad=False))
 
-def get_reward(bs, actions, learnable_tree, tree_params, tree_optim):
+def get_reward(bs, actions, learnable_tree, tree_params, tree_optim, lam):
 
     # x = (torch.rand(args.domainbs, dim).cuda())*(args.right-args.left)+args.left
     t = torch.rand(args.domainbs, 1).cuda()
@@ -592,7 +592,7 @@ def get_reward(bs, actions, learnable_tree, tree_params, tree_optim):
             # changing LHS_pde function to simply take the learnable tree directly for ease of computation of the
             # integral
             function_error = torch.nn.functional.mse_loss(func.LHS_pde(lhs_func, x), func.RHS_pde(x))
-            loss = function_error + 100*bd_error
+            loss = function_error + lam*bd_error
             tree_optim.zero_grad()
             loss.backward()
             tree_optim.step()
@@ -609,7 +609,7 @@ def get_reward(bs, actions, learnable_tree, tree_params, tree_optim):
             bd_nn = learnable_tree(bd_pts, bs_action)
             bd_error = torch.nn.functional.mse_loss(bc_true, bd_nn)
             function_error = torch.nn.functional.mse_loss(func.LHS_pde(lhs_func, x), func.RHS_pde(x))
-            loss = function_error + 100*bd_error
+            loss = function_error + lam*bd_error
             print('loss before: ', loss.item())
             error_hist.append(loss.item())
             loss.backward()
@@ -624,7 +624,7 @@ def get_reward(bs, actions, learnable_tree, tree_params, tree_optim):
         bc_true = func.true_solution(bd_pts)
         bd_nn = learnable_tree(bd_pts, bs_action)
         bd_error = torch.nn.functional.mse_loss(bc_true, bd_nn)
-        regression_error = function_error + 100*bd_error
+        regression_error = function_error + lam*bd_error
         # print('loss after: ', regression_error.item())
         print('loss after, bd error: {}  '.format(bd_error.item()), ' eigen: {} '.format(function_error.item()))
         error_hist.append(regression_error.item())
@@ -648,7 +648,7 @@ def discount(x, amount):
 def true(x):
     return -0.5*(torch.sum(x**2, dim=1, keepdim=True))
 
-def best_error(best_action, learnable_tree):
+def best_error(best_action, learnable_tree, lam):
 
     t = torch.rand(args.domainbs, 1).cuda()
     x1 = (torch.rand(args.domainbs, args.dim - 1).cuda()) * (args.right - args.left) + args.left
@@ -664,13 +664,17 @@ def best_error(best_action, learnable_tree):
     bd_nn = learnable_tree(bd_pts, bs_action)
     bd_error = torch.nn.functional.mse_loss(bc_true, bd_nn)
     function_error = torch.nn.functional.mse_loss(func.LHS_pde(lhs_func, x), func.RHS_pde(x))
-    regression_error = function_error + 100 * bd_error
+    regression_error = function_error + lam * bd_error
 
     print('bd error: {}  '.format(bd_error.item()), ' eigen: {} '.format(function_error.item()))
 
     return regression_error
 
 def train_controller(Controller, Controller_optim, trainable_tree, tree_params, hyperparams):
+
+    # hyperparameter lam is used for L(u) computation, L(u) + ||function_err||^2 + lam||boundary_err||^2
+    # was originally set to 100, I want to play around with it since that seems extremely high
+    lam = 1
 
     ### obtain a new file name ###
     file_name = os.path.join(hyperparams['checkpoint'], 'log{}.txt')
@@ -699,7 +703,7 @@ def train_controller(Controller, Controller_optim, trainable_tree, tree_params, 
         for action in actions:
             binary_code = binary_code + str(action[0].item())
 
-        rewards, formulas = get_reward(bs, actions, trainable_tree, tree_params, tree_optim)
+        rewards, formulas = get_reward(bs, actions, trainable_tree, tree_params, tree_optim, lam)
         rewards = torch.cuda.FloatTensor(rewards).view(-1,1)
         # discount
         if 1 > hyperparams['discount'] > 0:
@@ -799,7 +803,7 @@ def train_controller(Controller, Controller_optim, trainable_tree, tree_params, 
         tree_optim = torch.optim.Adam(params, lr=1e-2)
 
         for current_iter in range(finetune):
-            error = best_error(candidate_.action, trainable_tree)
+            error = best_error(candidate_.action, trainable_tree, lam)
             tree_optim.zero_grad()
             error.backward()
 
