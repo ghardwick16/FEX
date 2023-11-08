@@ -17,7 +17,7 @@ parser = argparse.ArgumentParser(description='NAS')
 
 parser.add_argument('--left', default=0, type=float)
 parser.add_argument('--right', default=1, type=float)
-parser.add_argument('--epoch', default=2000, type=int)
+parser.add_argument('--epoch', default=500, type=int)
 parser.add_argument('--bs', default=1, type=int)
 parser.add_argument('--greedy', default=0, type=float)
 parser.add_argument('--random_step', default=0, type=float)
