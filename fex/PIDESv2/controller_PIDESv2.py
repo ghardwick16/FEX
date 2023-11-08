@@ -582,8 +582,9 @@ def get_reward(bs, actions, learnable_tree, tree_params, tree_optim, lam):
         # regression_error = torch.nn.functional.mse_loss(learnable_tree(x, bs_action), func.true_solution(x))
 
         reset_params(tree_params)
-        tree_optim = torch.optim.Adam(tree_params, lr=0.1)
-        for _ in range(80):
+        tree_optim = torch.optim.Adam(tree_params, lr=0.001)
+        print(inorder_visualize(basic_tree(), bs_action, trainable_tree))
+        for _ in range(20):
             bd_pts = get_boundary(args.bdbs, dim)
             bc_true = func.true_solution(bd_pts)
             bd_nn = learnable_tree(bd_pts, bs_action)
@@ -596,9 +597,8 @@ def get_reward(bs, actions, learnable_tree, tree_params, tree_optim, lam):
             tree_optim.zero_grad()
             loss.backward()
             tree_optim.step()
-        print(f'loss after adam: {loss}')
 
-        tree_optim = torch.optim.LBFGS(tree_params, lr=1, max_iter=40)
+        tree_optim = torch.optim.LBFGS(tree_params, lr=1, max_iter=20)
         print('---------------------------------- batch idx {} -------------------------------------'.format(bs_idx))
 
         error_hist = []
@@ -617,6 +617,7 @@ def get_reward(bs, actions, learnable_tree, tree_params, tree_optim, lam):
             return loss
 
         tree_optim.step(closure)
+        print(inorder_visualize(basic_tree(), bs_action, trainable_tree))
 
 
 
@@ -672,7 +673,7 @@ def train_controller(Controller, Controller_optim, trainable_tree, tree_params, 
 
     # hyperparameter lam is used for L(u) computation, L(u) + ||function_err||^2 + lam||boundary_err||^2
     # was originally set to 100, I want to play around with it since that seems extremely high
-    lam = 1
+    lam = 100
 
     ### obtain a new file name ###
     file_name = os.path.join(hyperparams['checkpoint'], 'log{}.txt')
