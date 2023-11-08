@@ -49,6 +49,7 @@ def get_boundary(num_pts, dim):
     bd_pts[:, 0] = 1 #the 0th index would be for time, which we want to be one since the
                      #given boundary condition is u(T,x) = x and T = max time  = 1 since we
                      #let t be in [0,1]
+    bd_pts.requires_grad = True
     return bd_pts
 
 
@@ -583,7 +584,7 @@ def get_reward(bs, actions, learnable_tree, tree_params, tree_optim, lam):
 
         reset_params(tree_params)
         tree_optim = torch.optim.SGD(tree_params, lr=0.001)
-        for _ in range(200):
+        for _ in range(20):
             bd_pts = get_boundary(args.bdbs, dim)
             bc_true = func.true_solution(bd_pts)
             bd_nn = learnable_tree(bd_pts, bs_action)
@@ -593,7 +594,6 @@ def get_reward(bs, actions, learnable_tree, tree_params, tree_optim, lam):
             # integral
             function_error = torch.nn.functional.mse_loss(func.LHS_pde(lhs_func, x), func.RHS_pde(x))
             loss = function_error + lam*bd_error
-            print(f'loss = {loss}')
             tree_optim.zero_grad()
             loss.backward()
             tree_optim.step()
