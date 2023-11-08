@@ -9,5 +9,5 @@ for i in range(5):
     for dim in [2]:
         gpu = gpus[idx]
         idx += 1
-        os.system('python controller_PIDESv2.py --epoch 500 --bs 10 --greedy .1 --gpu '+str(gpu)+' --ckpt t_range_0_1_2ksearch_int20k_bd4kDim'+str(dim)+' --tree depth2 --random_step 3 --lr 0.002 --dim '+str(dim)+' --base 5000 --left 0 --right 1 --domainbs 5000 --bdbs 5000')
+        os.system('python controller_PIDESv2.py --epoch 500 --bs 10 --greedy .1 --gpu '+str(gpu)+' --ckpt t_range_0_1_2ksearch_int20k_bd4kDim'+str(dim)+' --tree depth1 --random_step 3 --lr 0.002 --dim '+str(dim)+' --base 5000 --left 0 --right 1 --domainbs 5000 --bdbs 5000')
         time.sleep(500)
