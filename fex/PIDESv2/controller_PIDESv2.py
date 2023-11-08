@@ -576,8 +576,8 @@ def get_reward(bs, actions, learnable_tree, tree_params, tree_optim, lam):
 
         reset_params(tree_params)
         tree_optim = torch.optim.Adam(tree_params, lr=0.1)
-        print(len(tree_params))
-        for _ in range(20):
+        for _ in range(30):
+            tree_optim.zero_grad()
             bd_pts = get_boundary(args.bdbs, dim)
 
             t = torch.rand(args.domainbs, 1).cuda()
@@ -593,7 +593,6 @@ def get_reward(bs, actions, learnable_tree, tree_params, tree_optim, lam):
             # integral
             function_error = torch.nn.functional.mse_loss(func.LHS_pde(lhs_func, x), func.RHS_pde(x))
             loss = function_error + lam*bd_error
-            tree_optim.zero_grad()
             loss.backward()
             print(f'loss during Adam:{loss}')
             tree_optim.step()
