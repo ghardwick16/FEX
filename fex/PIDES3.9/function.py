@@ -61,7 +61,7 @@ def RHS_pde(tx):
     sigma = .25
     lam = .3
     epsilon = .25
-    theta = 0
+    theta = .3
     return epsilon * (tx[:, 1:] ** 2).cuda() + theta ** 2 + \
         (lam * (mu ** 2 + sigma ** 2))
 
