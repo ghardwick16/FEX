@@ -26,6 +26,7 @@ def LHS_pde(func, tx):  # changed to let this use the pair (learnable_tree, bs_a
     right = 1
 
     z = center_integration_points(tx.shape[1]-1, 1000, left=left, right=right)
+    print(z.shape)
     t = torch.squeeze(tx[..., 0]).cuda()
     x = torch.squeeze(tx[..., 1:]).cuda()
 
