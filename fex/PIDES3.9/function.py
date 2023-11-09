@@ -31,7 +31,11 @@ def LHS_pde(func, tx):  # changed to let this use the pair (learnable_tree, bs_a
     t = torch.squeeze(tx[..., 0]).cuda()
     x = torch.squeeze(tx[..., 1:]).cuda()
 
-    nu = lam / torch.sqrt(2 * torch.Tensor([math.pi]) * sigma).cuda() * torch.exp(-.5 * ((z - mu) / sigma).cuda() ** 2)
+    # nu is a multivariable normal PDF with covariance sigma*I_d, mean mu.  As such, det(sigma*I_d) = (sigma^d)
+    coef = lam / ((torch.sqrt(2 * torch.Tensor([math.pi]).cuda()) * sigma) ** (tx.shape[1] - 1))
+    z_minus_mu = z - mu
+    nu = coef * torch.exp(-.5 / sigma ** 2 * torch.sum((z_minus_mu).pow(2), dim=1))
+
     tx_shift = tx.unsqueeze(1).repeat(1, z.shape[0], 1).cuda()
     z_large = z.unsqueeze(0).repeat(tx.shape[0], 1, 1).cuda()
     tx_shift[..., 1:] += z_large
