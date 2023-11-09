@@ -94,7 +94,7 @@ def LHS_pde(func, tx):  # changed to let this use the pair (learnable_tree, bs_a
     z_minus_mu = z - mu
     nu = coef * torch.exp(-.5 / sigma ** 2 * torch.sum(z_minus_mu ** 2, dim=1))
     integrand = (u_shift - u.unsqueeze(1).repeat(1, z.shape[0]) - dot_prod) * nu.unsqueeze(0).repeat(tx.shape[0], 1)
-    integral_dz = torch.sum(integrand, dim=1)*((right - left)**(tx.shape[1]-1))/points.shape[0]
+    integral_dz = torch.sum(integrand, dim=1)*((right - left)**(tx.shape[1]-1))/z.shape[0]
     # since epsilon is zero I just got rid of the eps*x dot grad u term
     return ut + epsilon/2 * torch.sum(tx[:, 1:]*du[:, 1:], dim=1) * 1 / 2 * theta**2 * trace_hessian + integral_dz
 
