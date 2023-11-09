@@ -43,7 +43,6 @@ def integrand(func, u, du, mu, sigma, lam, tx, z):
     u_shift = u_shift.reshape(z.shape[0], tx.shape[0])  # reshaped the output to be of the shape that we expect for the integration step
     # z dot grad u
     dot_prod = torch.sum((du[:, 1:].unsqueeze(0).repeat(z.shape[0], 1, 1) * z_large), dim=-1)
-    print(dot_prod.requires_grad)
     # nu is a multivariable normal PDF with covariance sigma*I_d, mean mu.  As such, det(sigma*I_d) = (sigma^d)*1
     coef = lam / ((torch.sqrt(2 * torch.Tensor([math.pi]).cuda()) * sigma) ** (tx.shape[1] - 1))
     z_minus_mu = z - mu
@@ -57,7 +56,7 @@ def LHS_pde(func, tx):  # changed to let this use the pair (learnable_tree, bs_a
     theta = .3
     left = 0
     right = 1
-    epsilon = 0
+    epsilon = .25
     tx = tx.cuda()
     if type(func) is tuple:
         learnable_tree = func[0]
@@ -84,7 +83,7 @@ def LHS_pde(func, tx):  # changed to let this use the pair (learnable_tree, bs_a
     points = center_integration_points(dims=tx.shape[1]-1, grid_points=1000, left=left, right=right)
     integral_dz = torch.sum(integrand(u_func, u, du, mu, sigma, lam, tx, points), dim=0)*((right - left)**(tx.shape[1]-1))/points.shape[0]
     # since epsilon is zero I just got rid of the eps*x dot grad u term
-    return ut + 1 / 2 * theta**2 * trace_hessian + integral_dz
+    return ut + epsilon/2 * torch.sum(tx[:, 1:]*du[:, 1:], dim=1) * 1 / 2 * theta**2 * trace_hessian + integral_dz
 
 
 def RHS_pde(tx):
@@ -92,10 +91,10 @@ def RHS_pde(tx):
     mu = .4
     sigma = .25
     lam = .3
-    epsilon = 0
+    epsilon = .25
     theta = .3
     # since epsilon is zero I just removed the eps/d*||x||^2 term
-    return torch.ones(tx.shape[0]).cuda() * (lam * (mu**2 + sigma**2) + theta ** 2)
+    return torch.ones(tx.shape[0]).cuda() * (lam * (mu**2 + sigma**2) + theta ** 2) + epsilon * (torch.sum(tx[..., 1:]**2, dim=-1))*1/(tx.shape[1]-1)
 
 def true_solution(tx):  # for the most simple case, u(t,x) = 1/d*||x||^2
     return (torch.sum(tx[..., 1:]**2, dim=-1))*1/(tx.shape[1]-1)
