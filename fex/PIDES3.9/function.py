@@ -71,7 +71,7 @@ def LHS_pde(func, tx):  # changed to let this use the pair (learnable_tree, bs_a
                  nu.unsqueeze(0).repeat(tx.shape[0], 1) * (right - left) / z.shape[0]
     integral_dz = torch.sum(integrand, dim=-1)
 
-    return ut + epsilon / 2 * x * ux + 1 / 2 * theta ** 2 * trace_hessian + integral_dz
+    return ut + epsilon / 2 * torch.sum(x * ux, dim=-1) + 1 / 2 * theta ** 2 * trace_hessian + integral_dz
 
 
 def RHS_pde(tx):
