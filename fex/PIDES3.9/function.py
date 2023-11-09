@@ -68,7 +68,7 @@ def RHS_pde(tx):
 
 
 def true_solution(tx):
-    return torch.sum(tx[:,1:]**2, dim=-1)
+    return torch.sum(tx[:,1:]**2, dim=-1).unsqueeze(1)
 
 
 unary_functions = [lambda x: 0 * x ** 2,
