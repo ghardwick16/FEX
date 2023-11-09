@@ -19,11 +19,10 @@ def LHS_pde(func, tx):  # changed to let this use the pair (learnable_tree, bs_a
     nu = lam / torch.sqrt(2 * torch.Tensor([math.pi]) * sigma).cuda() * torch.exp(-.5 * ((z - mu) / sigma).cuda() ** 2)
     tx_expz = torch.stack((t.repeat(z.shape[0], 1).T, torch.outer(x, torch.exp(z).cuda())), dim=2)
     print(tx_expz.shape)
-    #tx_large = tx.unsqueeze(0).repeat(z.shape[0], 1, 1).cuda()
-    #z_large = z.unsqueeze(1).repeat(1, tx.shape[0], 1).cuda()
-    # had to flatten the input to the function to make it a 2d tensor of inputs rather than 3d.
-    #tx_shift = torch.cat((torch.unsqueeze(tx_large[:, :, 0], 2), (tx_large[:, :, 1:] + z_large)), dim=-1).view(
-    #    tx.shape[0] * z.shape[0], tx.shape[1])
+    tx_large = tx.unsqueeze(1).repeat(1, z.shape[0], 1).cuda()
+    z_large = z.unsqueeze(0).repeat(tx.shape[0], 1, 1).cuda()
+    input = torch.cat((torch.unsqueeze(tx_large[..., 0], 2), (tx_large[..., 1:] + z_large)), dim=-1)
+
     ### We have two cases:  either we pass in the condidate function in the form
     ### (learnable_tree, bs_action) or the true function (for measuring performance)
     if type(func) is tuple:
@@ -33,9 +32,9 @@ def LHS_pde(func, tx):  # changed to let this use the pair (learnable_tree, bs_a
     else:
         u_func = lambda y: func(y)
 
-    #u_shift = u_func(tx_shift).reshape(z.shape[0], tx.shape[0])
+    u_shift = torch.squeeze(func(input))
     u = torch.squeeze(u_func(tx))
-    u_expz = torch.squeeze(u_func(tx_expz))
+    #u_expz = torch.squeeze(u_func(tx_expz))
 
 
     # get derivatives
@@ -44,25 +43,32 @@ def LHS_pde(func, tx):  # changed to let this use the pair (learnable_tree, bs_a
     ut = du[:, 0]
     ux = torch.squeeze(du[:, 1:])
     # commented out the second derivatives - since theta = 0 they don't actually get used so faster to not compute them
-    #if du.requires_grad:
-    #    ddu = torch.autograd.grad(du, tx, grad_outputs=torch.ones_like(du), create_graph=True)[0]
-    #else:
-    #    ddu = torch.zeros_like(du).cuda()
-    #trace_hessian = torch.sum(ddu[:, 1:], dim=1)
+    hes_diag = torch.empty((tx.shape[0], tx.shape[1] - 1)).cuda()
+    if du.requires_grad:
+        for i in range(tx.shape[1] - 1):
+            hes_diag[:, i] = torch.autograd.grad(du[:, 1 + i], tx, grad_outputs=v, create_graph=True)[
+                                 0][:, 1 + i]
+    else:
+        hes_diag = torch.zeros_like(du).cuda()
+    trace_hessian = torch.sum(hes_diag, dim=1)
 
     #integration
-    exp_z = torch.exp(z).cuda()
-    integrand = (2*u_expz - 2*u.repeat(z.shape[0], 1).T - x.repeat(z.shape[0], 1).T * (exp_z.repeat(tx.shape[0], 1) - 1) * ux.repeat(z.shape[0], 1).T) * nu.repeat(tx.shape[0], 1)
-    #integrand = (2 * u.repeat(z.shape[0], 1).T - x.repeat(z.shape[0], 1).T * (
-    #            exp_z.repeat(tx.shape[0], 1) - 1) * ux.repeat(z.shape[0], 1).T) * nu.repeat(tx.shape[0], 1)
+    #exp_z = torch.exp(z).cuda()
+    #integrand = (2*u_expz - 2*u.repeat(z.shape[0], 1).T - x.repeat(z.shape[0], 1).T * (exp_z.repeat(tx.shape[0], 1) - 1) * ux.repeat(z.shape[0], 1).T) * nu.repeat(tx.shape[0], 1)
+    integrand = (u_shift - u.unsqueeze(1).repeat(1, z.shape[0]) - (du[:, 1:].unsqueeze(1).repeat(1, z.shape[0], 1) * z_large)) * nu.unsqueeze(0).repeat(tx.shape[0], 1)
     integral_dz = torch.trapezoid(integrand, z, dim=1)
 
-    return ut + epsilon/2 * x * ux + integral_dz
+    return ut + epsilon/2 * x * ux + 1/2 * theta**2 * trace_hessian + integral_dz
 
 def RHS_pde(tx):
     #  parameters for the RHS:
     epsilon = .25
-    return epsilon * torch.squeeze(tx[:, 1:]**2).cuda()
+    mu = .4
+    sigma = .25
+    lam = .3
+    epsilon = .25
+    theta = 0
+    return epsilon * torch.squeeze(tx[:, 1:]**2).cuda() + theta**2 + (lam * (mu**2 + sigma**2))
 
 
 
