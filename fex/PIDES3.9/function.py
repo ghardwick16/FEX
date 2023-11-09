@@ -22,12 +22,12 @@ def LHS_pde(func, tx):  # changed to let this use the pair (learnable_tree, bs_a
     mu = .5
     sigma = .1
     lam = .3
-    epsilon = 0
+    epsilon = .3
     theta = .3
     left = 0
     right = 1
 
-    z = center_integration_points(tx.shape[1] - 1, 100000, left=left, right=right)
+    z = center_integration_points(tx.shape[1] - 1, 10000, left=left, right=right)
     t = torch.squeeze(tx[..., 0]).cuda()
     x = torch.squeeze(tx[..., 1:]).cuda()
 
@@ -79,7 +79,7 @@ def RHS_pde(tx):
     mu = .5
     sigma = .1
     lam = .3
-    epsilon = 0
+    epsilon = .3
     theta = .3
     norm = 1 / (tx.shape[1] - 1) * torch.sum(tx[:, 1:] ** 2, dim=-1)
     return epsilon * norm + theta ** 2 + \

@@ -778,7 +778,7 @@ def train_controller(Controller, Controller_optim, trainable_tree, tree_params, 
             action_string += str(v.item()) + '-'
         logger.append([666, 0, 0, action_string, candidate_.error.item(), candidate_.expression])
         # logger.append([666, 0, 0, 0, candidate_.error.item(), candidate_.expression]) 
-    finetune = 20000
+    finetune = 10000
     global count, leaves_cnt
     for candidate_ in candidates.candidates:
         trainable_tree = learnable_compuatation_tree()
@@ -795,7 +795,7 @@ def train_controller(Controller, Controller_optim, trainable_tree, tree_params, 
                 params.append(param)
 
         reset_params(params)
-        tree_optim = torch.optim.Adam(params, lr=1e-2)
+        tree_optim = torch.optim.Adam(params, lr=1e-3)
 
         for current_iter in range(finetune):
             error = best_error(candidate_.action, trainable_tree)
