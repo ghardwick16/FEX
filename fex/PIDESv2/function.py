@@ -27,24 +27,6 @@ def center_integration_points(dims, grid_points, left, right):
         out_tens[:, i] = torch.flatten(grid[i])
     return out_tens
 
-
-def integrand(func, u, du, mu, sigma, lam, tx, z):
-    tx = tx.cuda()
-    z = z.cuda()
-    mu = torch.tensor([mu]).cuda()
-    sigma = torch.tensor([sigma]).cuda()
-    # u(t, x + z)
-    tx_large = tx.unsqueeze(1).repeat(1, z.shape[0], 1).cuda()
-    z_large = z.unsqueeze(0).repeat(tx.shape[0], 1, 1).cuda()
-    input = torch.cat((torch.unsqueeze(tx_large[..., 0], 2), (tx_large[..., 1:] + z_large)), dim=-1)
-    u_shift = torch.squeeze(func(input))
-    # z dot grad u
-    dot_prod = torch.sum((du[:, 1:].unsqueeze(1).repeat(1, z.shape[0], 1) * z_large), dim=-1)
-    # nu is a multivariable normal PDF with covariance sigma*I_d, mean mu.  As such, det(sigma*I_d) = (sigma^d)
-    coef = lam / ((torch.sqrt(2 * torch.Tensor([math.pi]).cuda()) * sigma) ** (tx.shape[1] - 1))
-    z_minus_mu = z - mu
-    nu = coef * torch.exp(-.5 / sigma ** 2 * torch.sum(z_minus_mu**2, dim=1))
-    return (u_shift - u.unsqueeze(1).repeat(1, z.shape[0]) - dot_prod) * nu.unsqueeze(0).repeat(tx.shape[0], 1)
 def LHS_pde(func, tx):  # changed to let this use the pair (learnable_tree, bs_action) for computation directly
     # parameters for the LHS
     mu = .4
@@ -78,7 +60,7 @@ def LHS_pde(func, tx):  # changed to let this use the pair (learnable_tree, bs_a
     trace_hessian = torch.sum(hes_diag, dim=1)
     # take the integral
     z = center_integration_points(dims=tx.shape[1]-1, grid_points=1000, left=left, right=right).cuda()
-    print(z.shape)
+    z.requires_grad = True
 
     mu = torch.tensor([mu]).cuda()
     sigma = torch.tensor([sigma]).cuda()
