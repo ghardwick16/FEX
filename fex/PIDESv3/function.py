@@ -18,6 +18,12 @@ def LHS_pde(func, tx):  # changed to let this use the pair (learnable_tree, bs_a
 
     nu = lam / torch.sqrt(2 * torch.Tensor([math.pi]) * sigma).cuda() * torch.exp(-.5 * ((z - mu) / sigma).cuda() ** 2)
     tx_expz = torch.stack((t.repeat(z.shape[0], 1).T, torch.outer(x, torch.exp(z).cuda())), dim=2)
+    print(tx_expz.shape)
+    tx_large = tx.unsqueeze(0).repeat(z.shape[0], 1, 1).cuda()
+    z_large = z.unsqueeze(1).repeat(1, tx.shape[0], 1).cuda()
+    # had to flatten the input to the function to make it a 2d tensor of inputs rather than 3d.
+    tx_shift = torch.cat((torch.unsqueeze(tx_large[:, :, 0], 2), (tx_large[:, :, 1:] + z_large)), dim=-1).view(
+        tx.shape[0] * z.shape[0], tx.shape[1])
     ### We have two cases:  either we pass in the condidate function in the form
     ### (learnable_tree, bs_action) or the true function (for measuring performance)
     if type(func) is tuple:
@@ -27,8 +33,10 @@ def LHS_pde(func, tx):  # changed to let this use the pair (learnable_tree, bs_a
     else:
         u_func = lambda y: func(y)
 
+    u_shift = u_func(tx_shift).reshape(z.shape[0], tx.shape[0])
     u = torch.squeeze(u_func(tx))
     u_expz = torch.squeeze(u_func(tx_expz))
+
 
     # get derivatives
     v = torch.ones(u.shape).cuda()
@@ -45,6 +53,8 @@ def LHS_pde(func, tx):  # changed to let this use the pair (learnable_tree, bs_a
     #integration
     exp_z = torch.exp(z).cuda()
     integrand = (2*u_expz - 2*u.repeat(z.shape[0], 1).T - x.repeat(z.shape[0], 1).T * (exp_z.repeat(tx.shape[0], 1) - 1) * ux.repeat(z.shape[0], 1).T) * nu.repeat(tx.shape[0], 1)
+    #integrand = (2 * u.repeat(z.shape[0], 1).T - x.repeat(z.shape[0], 1).T * (
+    #            exp_z.repeat(tx.shape[0], 1) - 1) * ux.repeat(z.shape[0], 1).T) * nu.repeat(tx.shape[0], 1)
     integral_dz = torch.trapezoid(integrand, z, dim=1)
 
     return ut + epsilon/2 * x * ux + integral_dz
