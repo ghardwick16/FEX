@@ -3,6 +3,17 @@ import torch
 from torch import sin, cos, exp
 import math
 
+def center_integration_points(dims, grid_points, left, right):
+    num_per_dim = int(np.floor((grid_points**(1/dims))))
+    tics = torch.linspace(left, right, steps=num_per_dim)
+    tens_list = []
+    for i in range(dims):
+        tens_list.append(tics)
+    grid = torch.meshgrid(tens_list)
+    out_tens = torch.empty((num_per_dim**dims, dims)).cuda()
+    for i in range(len(grid)):
+        out_tens[:, i] = torch.flatten(grid[i])
+    return out_tens
 
 def LHS_pde(func, tx):  # changed to let this use the pair (learnable_tree, bs_action) for computation directly
     # parameters for the LHS
@@ -11,9 +22,10 @@ def LHS_pde(func, tx):  # changed to let this use the pair (learnable_tree, bs_a
     lam = .3
     epsilon = .25
     theta = .3
-    num_traps = 5  # traps super low to keep code faster
+    left = 0
+    right = 1
 
-    z = torch.linspace(0, 1, num_traps).cuda()
+    z = center_integration_points(tx.shape[1]-1, 1000, left=left, right=right)
     t = torch.squeeze(tx[..., 0]).cuda()
     x = torch.squeeze(tx[..., 1:]).cuda()
 
@@ -52,8 +64,8 @@ def LHS_pde(func, tx):  # changed to let this use the pair (learnable_tree, bs_a
     print(z_large.shape)
 
     integrand = (u_shift - u.unsqueeze(1).repeat(1, z.shape[0]) - (du[:, 1:].repeat(1, z.shape[0]) * z_large)) * \
-                nu.unsqueeze(0).repeat(tx.shape[0], 1)
-    integral_dz = torch.trapezoid(integrand, z, dim=1)
+                nu.unsqueeze(0).repeat(tx.shape[0], 1) * (right-left)/z.shape[0]
+    integral_dz = torch.sum(integrand, dim=-1)
 
     return ut + epsilon / 2 * x * ux + 1 / 2 * theta ** 2 * trace_hessian + integral_dz
 
