@@ -43,9 +43,7 @@ def integrand(func, u, du, mu, sigma, lam, tx, z):
     # nu is a multivariable normal PDF with covariance sigma*I_d, mean mu.  As such, det(sigma*I_d) = (sigma^d)
     coef = lam / ((torch.sqrt(2 * torch.Tensor([math.pi]).cuda()) * sigma) ** (tx.shape[1] - 1))
     z_minus_mu = z - mu
-    nu = coef * torch.exp(-.5 / sigma ** 2 * torch.sum((z_minus_mu).pow(2), dim=1))
-    print(u_shift.shape)
-    print(u.unsqueeze(1).repeat(1, z.shape[0]).shape)
+    nu = coef * torch.exp(-.5 / sigma ** 2 * torch.sum(z_minus_mu**2, dim=1))
     return (u_shift - u.unsqueeze(1).repeat(1, z.shape[0]) - dot_prod) * nu.unsqueeze(0).repeat(tx.shape[0], 1)
 def LHS_pde(func, tx):  # changed to let this use the pair (learnable_tree, bs_action) for computation directly
     # parameters for the LHS

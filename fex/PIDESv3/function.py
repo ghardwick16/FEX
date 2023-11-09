@@ -36,8 +36,6 @@ def LHS_pde(func, tx):  # changed to let this use the pair (learnable_tree, bs_a
     #u_shift = u_func(tx_shift).reshape(z.shape[0], tx.shape[0])
     u = torch.squeeze(u_func(tx))
     u_expz = torch.squeeze(u_func(tx_expz))
-    print(tx_expz.shape)
-    print(u_expz.shape)
 
 
     # get derivatives
