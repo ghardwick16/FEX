@@ -63,7 +63,7 @@ def RHS_pde(tx):
     epsilon = .25
     theta = .3
     print(torch.sum(torch.abs(torch.sum(tx[:,1:]**2, dim=-1) - torch.squeeze(tx[:,1:]**2))))
-    return epsilon * (tx[:, 1:] ** 2).cuda() + theta ** 2 + \
+    return epsilon * tx[:, 1:] ** 2 + theta ** 2 + \
         (lam * (mu ** 2 + sigma ** 2))
 
 
