@@ -777,7 +777,7 @@ def train_controller(Controller, Controller_optim, trainable_tree, tree_params, 
         for v in candidate_.action:
             action_string += str(v.item()) + '-'
         logger.append([666, 0, 0, action_string, candidate_.error.item(), candidate_.expression])
-        # logger.append([666, 0, 0, 0, candidate_.error.item(), candidate_.expression])
+        # logger.append([666, 0, 0, 0, candidate_.error.item(), candidate_.expression]) 
     finetune = 20000
     global count, leaves_cnt
     for candidate_ in candidates.candidates:

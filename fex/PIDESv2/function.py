@@ -3,40 +3,26 @@ import torch
 from torch import sin, cos, exp
 import math
 
-
-# basic montecarlo integrator for higher dims
-def montecarlo_integration(function, domain, num_samples):
-    points = torch.empty((num_samples, len(domain)))
-    vol = 1
-    for i in range(len(domain)):
-        vol *= (domain[i][1] - domain[i][0])
-        points[:, i] = torch.rand(num_samples).cuda() * (domain[i][1] - domain[i][0]) + domain[i][0]
-    return vol / num_samples * torch.sum(function(points))
-
-
-# pre-computes grid points for an n-dim riemann integration method
-def center_integration_points(dims, grid_points, left, right):
-    num_per_dim = int(grid_points**(1/dims))
-    tics = torch.linspace(left, right, steps=num_per_dim)
-    tens_list = []
-    for i in range(dims):
-        tens_list.append(tics)
-    grid = torch.meshgrid(tens_list)
-    out_tens = torch.empty((num_per_dim**dims, dims))
-    for i in range(len(grid)):
-        out_tens[:, i] = torch.flatten(grid[i])
-    return out_tens
-
 def LHS_pde(func, tx):  # changed to let this use the pair (learnable_tree, bs_action) for computation directly
     # parameters for the LHS
     mu = .4
     sigma = .25
     lam = .3
-    theta = .3
-    left = 0
-    right = 1
     epsilon = .25
-    tx = tx.cuda()
+    theta = .3
+    num_traps = 5  # traps super low to keep code faster
+
+    z = torch.linspace(0, 1, num_traps).cuda()
+    t = torch.squeeze(tx[..., 0]).cuda()
+    x = torch.squeeze(tx[..., 1:]).cuda()
+
+    nu = lam / torch.sqrt(2 * torch.Tensor([math.pi]) * sigma).cuda() * torch.exp(-.5 * ((z - mu) / sigma).cuda() ** 2)
+    tx_expz = torch.stack((t.repeat(z.shape[0], 1).T, torch.outer(x, torch.exp(z).cuda())), dim=2)
+    tx_shift = tx.unsqueeze(1).repeat(1, z.shape[0], 1).cuda()
+    z_large = z.unsqueeze(0).repeat(tx.shape[0], 1).cuda()
+    tx_shift[..., 1:] += z_large.unsqueeze(2)
+    ### We have two cases:  either we pass in the condidate function in the form
+    ### (learnable_tree, bs_action) or the true function (for measuring performance)
     if type(func) is tuple:
         learnable_tree = func[0]
         bs_action = func[1]
@@ -44,42 +30,33 @@ def LHS_pde(func, tx):  # changed to let this use the pair (learnable_tree, bs_a
     else:
         u_func = lambda y: func(y)
 
+    u_shift = torch.squeeze(u_func(tx_shift))
     u = torch.squeeze(u_func(tx))
+    #u_expz = torch.squeeze(u_func(tx_expz))
 
-    # get derivatives, ut, ux, and trace of hessian
+
+    # get derivatives
     v = torch.ones(u.shape).cuda()
     du = torch.autograd.grad(u, tx, grad_outputs=v, create_graph=True)[0]
     ut = du[:, 0]
-    # ux = du[:, 1:]
+    ux = torch.squeeze(du[:, 1:])
+    # commented out the second derivatives - since theta = 0 they don't actually get used so faster to not compute them
     hes_diag = torch.empty((tx.shape[0], tx.shape[1] - 1)).cuda()
     if du.requires_grad:
         for i in range(tx.shape[1] - 1):
-            hes_diag[:, i] = torch.autograd.grad(du[:, 1 + i], tx, grad_outputs=v, create_graph=True)[0][:, 1 + i]
+            hes_diag[:, i] = torch.autograd.grad(du[:, 1 + i], tx, grad_outputs=v, create_graph=True)[
+                                 0][:, 1 + i]
     else:
         hes_diag = torch.zeros_like(du).cuda()
     trace_hessian = torch.sum(hes_diag, dim=1)
-    # take the integral
-    z = center_integration_points(dims=tx.shape[1]-1, grid_points=1000, left=left, right=right).cuda()
-    z.requires_grad = True
 
-    mu = torch.tensor([mu]).cuda()
-    sigma = torch.tensor([sigma]).cuda()
-    # u(t, x + z)
-    tx_shift = tx.unsqueeze(1).repeat(1, z.shape[0], 1).cuda()
-    z_large = z.unsqueeze(0).repeat(tx.shape[0], 1, 1).cuda()
-    tx_shift[..., 1:] += z_large
-    u_shift = torch.squeeze(u_func(tx_shift))
-    # z dot grad u
-    dot_prod = torch.sum((du[:, 1:].unsqueeze(1).repeat(1, z.shape[0], 1) * z_large), dim=-1)
-    # nu is a multivariable normal PDF with covariance sigma*I_d, mean mu.  As such, det(sigma*I_d) = (sigma^d)
-    coef = lam / ((torch.sqrt(2 * torch.Tensor([math.pi]).cuda()) * sigma) ** (tx.shape[1] - 1))
-    z_minus_mu = z - mu
-    nu = coef * torch.exp(-.5 / sigma ** 2 * torch.sum(z_minus_mu ** 2, dim=1))
-    integrand = (u_shift - u.unsqueeze(1).repeat(1, z.shape[0]) - dot_prod) * nu.unsqueeze(0).repeat(tx.shape[0], 1)
-    integral_dz = torch.sum(integrand, dim=1)*((right - left)**(tx.shape[1]-1))/z.shape[0]
-    # since epsilon is zero I just got rid of the eps*x dot grad u term
-    return ut + epsilon/2 * torch.sum(tx[:, 1:]*du[:, 1:], dim=1) * 1 / 2 * theta**2 * trace_hessian + integral_dz
+    #integration
+    #exp_z = torch.exp(z).cuda()
+    #integrand = (2*u_expz - 2*u.repeat(z.shape[0], 1).T - x.repeat(z.shape[0], 1).T * (exp_z.repeat(tx.shape[0], 1) - 1) * ux.repeat(z.shape[0], 1).T) * nu.repeat(tx.shape[0], 1)
+    integrand = (u_shift - u.unsqueeze(1).repeat(1, z.shape[0]) - (du[:, 1:].repeat(1, z.shape[0]) * z_large)) * nu.unsqueeze(0).repeat(tx.shape[0], 1)
+    integral_dz = torch.trapezoid(integrand, z, dim=1)
 
+    return ut + epsilon/2 * x * ux + 1/2 * theta**2 * trace_hessian + integral_dz
 
 def RHS_pde(tx):
     #  parameters for the RHS:
@@ -87,12 +64,13 @@ def RHS_pde(tx):
     sigma = .25
     lam = .3
     epsilon = .25
-    theta = .3
-    # since epsilon is zero I just removed the eps/d*||x||^2 term
-    return torch.ones(tx.shape[0]).cuda() * (lam * (mu**2 + sigma**2) + theta ** 2) + epsilon * (torch.sum(tx[..., 1:]**2, dim=-1))*1/(tx.shape[1]-1)
+    theta = 0
+    return epsilon * torch.squeeze(tx[:, 1:]**2).cuda() + theta**2 + (lam * (mu**2 + sigma**2))
 
-def true_solution(tx):  # for the most simple case, u(t,x) = 1/d*||x||^2
-    return (torch.sum(tx[..., 1:]**2, dim=-1))*1/(tx.shape[1]-1)
+
+
+def true_solution(tx):  # for the most simple case, u(t,x) = x
+    return (tx[:, 1:]**2).cuda()
 
 
 unary_functions = [lambda x: 0 * x ** 2,
@@ -103,8 +81,7 @@ unary_functions = [lambda x: 0 * x ** 2,
                    lambda x: x ** 4,
                    torch.exp,
                    torch.sin,
-                   torch.cos,
-                   ]
+                   torch.cos, ]
 
 binary_functions = [lambda x, y: x + y,
                     lambda x, y: x * y,
