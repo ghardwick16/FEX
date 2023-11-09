@@ -85,7 +85,9 @@ def LHS_pde(func, tx):  # changed to let this use the pair (learnable_tree, bs_a
     # u(t, x + z)
     tx_shift = tx.unsqueeze(1).repeat(1, z.shape[0], 1).cuda()
     z_large = z.unsqueeze(0).repeat(tx.shape[0], 1, 1).cuda()
-    tx_shift[..., 1:] += z_large.unsqueeze(2)
+    print(tx_shift.shape)
+    print(z_large.shape)
+    tx_shift[..., 1:] += z_large
     u_shift = torch.squeeze(func(tx_shift))
     # z dot grad u
     dot_prod = torch.sum((du[:, 1:].unsqueeze(1).repeat(1, z.shape[0], 1) * z_large), dim=-1)
