@@ -623,7 +623,7 @@ def get_reward(bs, actions, learnable_tree, tree_params, tree_optim):
 
         function_error = torch.nn.functional.mse_loss(func.LHS_pde(lhs_func, x), func.RHS_pde(x))
         bd_pts = get_boundary(args.bdbs, dim)
-        bc_true = func.true_solution(bd_pts)
+        bc_true = func.true_solution(bd_pts).unsqueeze(1)
         bd_nn = learnable_tree(bd_pts, bs_action)
         bd_error = torch.nn.functional.mse_loss(bc_true, bd_nn)
         regression_error = function_error + 100*bd_error
