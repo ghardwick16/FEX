@@ -47,6 +47,9 @@ def LHS_pde(func, tx):  # changed to let this use the pair (learnable_tree, bs_a
     else:
         hes_diag = torch.zeros_like(du).cuda()
     trace_hessian = torch.sum(hes_diag, dim=1)
+    print(u.unsqueeze(1).repeat(1, z.shape[0]).shape)
+    print(du[:, 1:].repeat(1, z.shape[0]).shape)
+    print(z_large.shape)
 
     integrand = (u_shift - u.unsqueeze(1).repeat(1, z.shape[0]) - (du[:, 1:].repeat(1, z.shape[0]) * z_large)) * \
                 nu.unsqueeze(0).repeat(tx.shape[0], 1)
