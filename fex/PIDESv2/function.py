@@ -51,8 +51,8 @@ def integrand(func, u, du, mu, sigma, lam, tx, z):
     return (u_shift - u.unsqueeze(0).repeat(z.shape[0], 1) - dot_prod) * nu.unsqueeze(1).repeat(1, tx.shape[0])
 def LHS_pde(func, tx):  # changed to let this use the pair (learnable_tree, bs_action) for computation directly
     # parameters for the LHS
-    mu = .5
-    sigma = .1
+    mu = .4
+    sigma = .25
     lam = .3
     theta = .3
     left = 0
@@ -89,8 +89,8 @@ def LHS_pde(func, tx):  # changed to let this use the pair (learnable_tree, bs_a
 
 def RHS_pde(tx):
     #  parameters for the RHS:
-    mu = .5
-    sigma = .1
+    mu = .4
+    sigma = .25
     lam = .3
     epsilon = 0
     theta = .3
