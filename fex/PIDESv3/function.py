@@ -32,7 +32,7 @@ def LHS_pde(func, tx):  # changed to let this use the pair (learnable_tree, bs_a
     else:
         u_func = lambda y: func(y)
 
-    u_shift = torch.squeeze(func(input))
+    u_shift = torch.squeeze(u_func(input))
     u = torch.squeeze(u_func(tx))
     #u_expz = torch.squeeze(u_func(tx_expz))
 
