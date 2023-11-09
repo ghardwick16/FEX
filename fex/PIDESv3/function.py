@@ -53,6 +53,8 @@ def LHS_pde(func, tx):  # changed to let this use the pair (learnable_tree, bs_a
     #integration
     #exp_z = torch.exp(z).cuda()
     #integrand = (2*u_expz - 2*u.repeat(z.shape[0], 1).T - x.repeat(z.shape[0], 1).T * (exp_z.repeat(tx.shape[0], 1) - 1) * ux.repeat(z.shape[0], 1).T) * nu.repeat(tx.shape[0], 1)
+    print(du[:, 1:].unsqueeze(1).repeat(1, z.shape[0], 1).shape)
+    print(z_large.shape)
     integrand = (u_shift - u.unsqueeze(1).repeat(1, z.shape[0]) - (du[:, 1:].unsqueeze(1).repeat(1, z.shape[0], 1) * z_large)) * nu.unsqueeze(0).repeat(tx.shape[0], 1)
     integral_dz = torch.trapezoid(integrand, z, dim=1)
 
