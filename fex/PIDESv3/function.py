@@ -21,9 +21,8 @@ def LHS_pde(func, tx):  # changed to let this use the pair (learnable_tree, bs_a
     tx_shift = tx.unsqueeze(1).repeat(1, z.shape[0], 1).cuda()
     z_large = z.unsqueeze(0).repeat(tx.shape[0], 1).cuda()
     print(tx_shift.shape)
-    print(z_large.shape)
-    tx_shift[..., 1:] += z_large
-
+    print(z_large.unsqueeze(2).shape)
+    tx_shift[..., 1:] += z_large.unsqueeze(2)
     ### We have two cases:  either we pass in the condidate function in the form
     ### (learnable_tree, bs_action) or the true function (for measuring performance)
     if type(func) is tuple:
