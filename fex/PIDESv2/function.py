@@ -34,20 +34,17 @@ def integrand(func, u, du, mu, sigma, lam, tx, z):
     mu = torch.tensor([mu]).cuda()
     sigma = torch.tensor([sigma]).cuda()
     # u(t, x + z)
-    tx_large = tx.unsqueeze(0).repeat(z.shape[0], 1, 1).cuda()
-    z_large = z.unsqueeze(1).repeat(1, tx.shape[0], 1).cuda()
-    # had to flatten the input to the function to make it a 2d tensor of inputs rather than 3d.
-    input = torch.cat((torch.unsqueeze(tx_large[:, :, 0], 2), (tx_large[:, :, 1:] + z_large)), dim=-1).view(
-        tx.shape[0] * z.shape[0], tx.shape[1])
+    tx_large = tx.unsqueeze(1).repeat(1, z.shape[0], 1).cuda()
+    z_large = z.unsqueeze(0).repeat(tx.shape[0], 1, 1).cuda()
+    input = torch.cat((torch.unsqueeze(tx_large[..., 0], 2), (tx_large[..., 1:] + z_large)), dim=-1)
     u_shift = func(input)
-    u_shift = u_shift.reshape(z.shape[0], tx.shape[0])  # reshaped the output to be of the shape that we expect for the integration step
     # z dot grad u
-    dot_prod = torch.sum((du[:, 1:].unsqueeze(0).repeat(z.shape[0], 1, 1) * z_large), dim=-1)
-    # nu is a multivariable normal PDF with covariance sigma*I_d, mean mu.  As such, det(sigma*I_d) = (sigma^d)*1
+    dot_prod = torch.sum((du[:, 1:].unsqueeze(1).repeat(1, z.shape[0], 1) * z_large), dim=-1)
+    # nu is a multivariable normal PDF with covariance sigma*I_d, mean mu.  As such, det(sigma*I_d) = (sigma^d)
     coef = lam / ((torch.sqrt(2 * torch.Tensor([math.pi]).cuda()) * sigma) ** (tx.shape[1] - 1))
     z_minus_mu = z - mu
-    nu = coef * torch.exp(-.5/sigma**2 * torch.sum(z_minus_mu**2, dim=1))
-    return (u_shift - u.unsqueeze(0).repeat(z.shape[0], 1) - dot_prod) * nu.unsqueeze(1).repeat(1, tx.shape[0])
+    nu = coef * torch.exp(-.5 / sigma ** 2 * torch.sum((z_minus_mu).pow(2), dim=1))
+    return (u_shift - u.unsqueeze(1).repeat(1, z.shape[0]) - dot_prod) * nu.unsqueeze(0).repeat(tx.shape[0], 1)
 def LHS_pde(func, tx):  # changed to let this use the pair (learnable_tree, bs_action) for computation directly
     # parameters for the LHS
     mu = .4
@@ -81,7 +78,7 @@ def LHS_pde(func, tx):  # changed to let this use the pair (learnable_tree, bs_a
     trace_hessian = torch.sum(hes_diag, dim=1)
     # take the integral
     points = center_integration_points(dims=tx.shape[1]-1, grid_points=1000, left=left, right=right)
-    integral_dz = torch.sum(integrand(u_func, u, du, mu, sigma, lam, tx, points), dim=0)*((right - left)**(tx.shape[1]-1))/points.shape[0]
+    integral_dz = torch.sum(integrand(u_func, u, du, mu, sigma, lam, tx, points), dim=1)*((right - left)**(tx.shape[1]-1))/points.shape[0]
     # since epsilon is zero I just got rid of the eps*x dot grad u term
     return ut + epsilon/2 * torch.sum(tx[:, 1:]*du[:, 1:], dim=1) * 1 / 2 * theta**2 * trace_hessian + integral_dz
 
