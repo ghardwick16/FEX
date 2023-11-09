@@ -57,7 +57,7 @@ def RHS_pde(tx):
 
 
 def true_solution(tx):  # for the most simple case, u(t,x) = x
-    return tx[:, 1:].cuda()
+    return (tx[:, 1:]**2).cuda()
 
 
 unary_functions = [lambda x: 0 * x ** 2,
