@@ -19,10 +19,10 @@ def center_integration_points(dims, grid_points, left, right):
 
 def LHS_pde(func, tx):  # changed to let this use the pair (learnable_tree, bs_action) for computation directly
     # parameters for the LHS
-    mu = .4
-    sigma = .25
+    mu = .5
+    sigma = .1
     lam = .3
-    epsilon = .25
+    epsilon = 0
     theta = .3
     left = 0
     right = 1
@@ -76,10 +76,10 @@ def LHS_pde(func, tx):  # changed to let this use the pair (learnable_tree, bs_a
 
 def RHS_pde(tx):
     #  parameters for the RHS:
-    mu = .4
-    sigma = .25
+    mu = .5
+    sigma = .1
     lam = .3
-    epsilon = .25
+    epsilon = 0
     theta = .3
     norm = 1 / (tx.shape[1] - 1) * torch.sum(tx[:, 1:] ** 2, dim=-1)
     return epsilon * norm + theta ** 2 + \
