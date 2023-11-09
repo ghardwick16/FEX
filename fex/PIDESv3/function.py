@@ -20,6 +20,8 @@ def LHS_pde(func, tx):  # changed to let this use the pair (learnable_tree, bs_a
     tx_expz = torch.stack((t.repeat(z.shape[0], 1).T, torch.outer(x, torch.exp(z).cuda())), dim=2)
     tx_large = tx.unsqueeze(1).repeat(1, z.shape[0], 1).cuda()
     z_large = z.unsqueeze(0).repeat(tx.shape[0], 1, 1).cuda()
+    print(tx_large.shape)
+    print(z_large.shape)
     input = torch.cat((torch.unsqueeze(tx_large[..., 0], 2), (tx_large[..., 1:] + z_large)), dim=-1)
     print(input.shape)
 
