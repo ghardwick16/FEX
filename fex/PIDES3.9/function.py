@@ -3,6 +3,7 @@ import torch
 from torch import sin, cos, exp
 import math
 
+
 def LHS_pde(func, tx):  # changed to let this use the pair (learnable_tree, bs_action) for computation directly
     # parameters for the LHS
     mu = .4
@@ -17,7 +18,6 @@ def LHS_pde(func, tx):  # changed to let this use the pair (learnable_tree, bs_a
     x = torch.squeeze(tx[..., 1:]).cuda()
 
     nu = lam / torch.sqrt(2 * torch.Tensor([math.pi]) * sigma).cuda() * torch.exp(-.5 * ((z - mu) / sigma).cuda() ** 2)
-    tx_expz = torch.stack((t.repeat(z.shape[0], 1).T, torch.outer(x, torch.exp(z).cuda())), dim=2)
     tx_shift = tx.unsqueeze(1).repeat(1, z.shape[0], 1).cuda()
     z_large = z.unsqueeze(0).repeat(tx.shape[0], 1).cuda()
     tx_shift[..., 1:] += z_large.unsqueeze(2)
@@ -32,15 +32,13 @@ def LHS_pde(func, tx):  # changed to let this use the pair (learnable_tree, bs_a
 
     u_shift = torch.squeeze(u_func(tx_shift))
     u = torch.squeeze(u_func(tx))
-    #u_expz = torch.squeeze(u_func(tx_expz))
-
 
     # get derivatives
     v = torch.ones(u.shape).cuda()
     du = torch.autograd.grad(u, tx, grad_outputs=v, create_graph=True)[0]
     ut = du[:, 0]
     ux = torch.squeeze(du[:, 1:])
-    # commented out the second derivatives - since theta = 0 they don't actually get used so faster to not compute them
+
     hes_diag = torch.empty((tx.shape[0], tx.shape[1] - 1)).cuda()
     if du.requires_grad:
         for i in range(tx.shape[1] - 1):
@@ -50,13 +48,12 @@ def LHS_pde(func, tx):  # changed to let this use the pair (learnable_tree, bs_a
         hes_diag = torch.zeros_like(du).cuda()
     trace_hessian = torch.sum(hes_diag, dim=1)
 
-    #integration
-    #exp_z = torch.exp(z).cuda()
-    #integrand = (2*u_expz - 2*u.repeat(z.shape[0], 1).T - x.repeat(z.shape[0], 1).T * (exp_z.repeat(tx.shape[0], 1) - 1) * ux.repeat(z.shape[0], 1).T) * nu.repeat(tx.shape[0], 1)
-    integrand = (u_shift - u.unsqueeze(1).repeat(1, z.shape[0]) - (du[:, 1:].repeat(1, z.shape[0]) * z_large)) * nu.unsqueeze(0).repeat(tx.shape[0], 1)
+    integrand = (u_shift - u.unsqueeze(1).repeat(1, z.shape[0]) - (du[:, 1:].repeat(1, z.shape[0]) * z_large)) * \
+                nu.unsqueeze(0).repeat(tx.shape[0], 1)
     integral_dz = torch.trapezoid(integrand, z, dim=1)
 
-    return ut + epsilon/2 * x * ux + 1/2 * theta**2 * trace_hessian + integral_dz
+    return ut + epsilon / 2 * x * ux + 1 / 2 * theta ** 2 * trace_hessian + integral_dz
+
 
 def RHS_pde(tx):
     #  parameters for the RHS:
@@ -64,13 +61,13 @@ def RHS_pde(tx):
     sigma = .25
     lam = .3
     epsilon = .25
-    theta = 0
-    return epsilon * torch.squeeze(tx[:, 1:]**2).cuda() + theta**2 + (lam * (mu**2 + sigma**2))
+    theta = .3
+    return epsilon * 1/(tx.shape[1] - 1) * torch.sum(tx[:, 1:] ** 2, dim=-1).cuda() + theta ** 2 + \
+        (lam * (mu ** 2 + sigma ** 2))
 
 
-
-def true_solution(tx):  # for the most simple case, u(t,x) = x
-    return (tx[:, 1:]**2).cuda()
+def true_solution(tx):
+    return 1/(tx.shape[1] - 1)*torch.sum(tx[:, 1:] ** 2, dim=-1).cuda()
 
 
 unary_functions = [lambda x: 0 * x ** 2,
