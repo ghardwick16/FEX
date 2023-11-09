@@ -62,7 +62,7 @@ def RHS_pde(tx):
 
 
 def true_solution(tx):  # for the most simple case, u(t,x) = x
-    return tx[:, 1]
+    return tx[:, 1].unsqueeze(1)
 
 
 unary_functions = [lambda x: 0 * x ** 2,
