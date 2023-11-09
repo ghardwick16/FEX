@@ -18,9 +18,6 @@ def LHS_pde(func, tx):  # changed to let this use the pair (learnable_tree, bs_a
 
     nu = lam / torch.sqrt(2 * torch.Tensor([math.pi]) * sigma).cuda() * torch.exp(-.5 * ((z - mu) / sigma).cuda() ** 2)
     tx_expz = torch.stack((t.repeat(z.shape[0], 1).T, torch.outer(x, torch.exp(z).cuda())), dim=2)
-    tx_shift = tx.unsqueeze(1).repeat(1, z.shape[0], 1).cuda()
-    z_large = z.unsqueeze(0).repeat(tx.shape[0], 1).cuda()
-    tx_shift[..., 1:] += z_large.unsqueeze(2)
     ### We have two cases:  either we pass in the condidate function in the form
     ### (learnable_tree, bs_action) or the true function (for measuring performance)
     if type(func) is tuple:
@@ -30,9 +27,8 @@ def LHS_pde(func, tx):  # changed to let this use the pair (learnable_tree, bs_a
     else:
         u_func = lambda y: func(y)
 
-    u_shift = torch.squeeze(u_func(tx_shift))
     u = torch.squeeze(u_func(tx))
-    #u_expz = torch.squeeze(u_func(tx_expz))
+    u_expz = torch.squeeze(u_func(tx_expz))
 
 
     # get derivatives
@@ -51,26 +47,22 @@ def LHS_pde(func, tx):  # changed to let this use the pair (learnable_tree, bs_a
     trace_hessian = torch.sum(hes_diag, dim=1)
 
     #integration
-    #exp_z = torch.exp(z).cuda()
-    #integrand = (2*u_expz - 2*u.repeat(z.shape[0], 1).T - x.repeat(z.shape[0], 1).T * (exp_z.repeat(tx.shape[0], 1) - 1) * ux.repeat(z.shape[0], 1).T) * nu.repeat(tx.shape[0], 1)
-    integrand = (u_shift - u.unsqueeze(1).repeat(1, z.shape[0]) - (du[:, 1:].repeat(1, z.shape[0]) * z_large)) * nu.unsqueeze(0).repeat(tx.shape[0], 1)
+    exp_z = torch.exp(z).cuda()
+    integrand = (u_expz - u.repeat(z.shape[0], 1).T - x.repeat(z.shape[0], 1).T * (exp_z.repeat(tx.shape[0], 1) - 1) *
+                 ux.repeat(z.shape[0], 1).T) * nu.repeat(tx.shape[0], 1)
     integral_dz = torch.trapezoid(integrand, z, dim=1)
 
-    return ut + epsilon/2 * x * ux + 1/2 * theta**2 * trace_hessian + integral_dz
+    return ut + epsilon * x * ux + 1/2 * theta**2 * trace_hessian + integral_dz
 
 def RHS_pde(tx):
     #  parameters for the RHS:
-    mu = .4
-    sigma = .25
-    lam = .3
     epsilon = .25
-    theta = 0
-    return epsilon * torch.squeeze(tx[:, 1:]**2).cuda() + theta**2 + (lam * (mu**2 + sigma**2))
+    return epsilon*tx[:, 1]
 
 
 
 def true_solution(tx):  # for the most simple case, u(t,x) = x
-    return (tx[:, 1:]**2).cuda()
+    return tx[:, 1]
 
 
 unary_functions = [lambda x: 0 * x ** 2,
