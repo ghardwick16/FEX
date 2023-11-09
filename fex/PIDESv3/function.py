@@ -19,7 +19,7 @@ def LHS_pde(func, tx):  # changed to let this use the pair (learnable_tree, bs_a
     nu = lam / torch.sqrt(2 * torch.Tensor([math.pi]) * sigma).cuda() * torch.exp(-.5 * ((z - mu) / sigma).cuda() ** 2)
     tx_expz = torch.stack((t.repeat(z.shape[0], 1).T, torch.outer(x, torch.exp(z).cuda())), dim=2)
     tx_shift = tx.unsqueeze(1).repeat(1, z.shape[0], 1).cuda()
-    z_large = z.unsqueeze(0).repeat(tx.shape[0], 1, 1).cuda()
+    z_large = z.unsqueeze(0).repeat(tx.shape[0], 1).cuda()
     print(tx_shift.shape)
     print(z_large.shape)
     tx_shift[..., 1:] += z_large
