@@ -39,6 +39,7 @@ def integrand(func, u, du, mu, sigma, lam, tx, z):
     # had to flatten the input to the function to make it a 2d tensor of inputs rather than 3d.
     input = torch.cat((torch.unsqueeze(tx_large[:, :, 0], 2), (tx_large[:, :, 1:] + z_large)), dim=-1).view(
         tx.shape[0] * z.shape[0], tx.shape[1])
+    print(input.requires_grad())
     u_shift = func(input)
     u_shift = u_shift.reshape(z.shape[0], tx.shape[0])  # reshaped the output to be of the shape that we expect for the integration step
     # z dot grad u
