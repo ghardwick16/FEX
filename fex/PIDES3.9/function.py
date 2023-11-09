@@ -3,17 +3,19 @@ import torch
 from torch import sin, cos, exp
 import math
 
+
 def center_integration_points(dims, grid_points, left, right):
-    num_per_dim = int(np.floor((grid_points**(1/dims))))
+    num_per_dim = int(np.floor((grid_points ** (1 / dims))))
     tics = torch.linspace(left, right, steps=num_per_dim)
     tens_list = []
     for i in range(dims):
         tens_list.append(tics)
     grid = torch.meshgrid(tens_list)
-    out_tens = torch.empty((num_per_dim**dims, dims)).cuda()
+    out_tens = torch.empty((num_per_dim ** dims, dims)).cuda()
     for i in range(len(grid)):
         out_tens[:, i] = torch.flatten(grid[i])
     return out_tens
+
 
 def LHS_pde(func, tx):  # changed to let this use the pair (learnable_tree, bs_action) for computation directly
     # parameters for the LHS
@@ -25,7 +27,7 @@ def LHS_pde(func, tx):  # changed to let this use the pair (learnable_tree, bs_a
     left = 0
     right = 1
 
-    z = center_integration_points(tx.shape[1]-1, 1000, left=left, right=right)
+    z = center_integration_points(tx.shape[1] - 1, 1000, left=left, right=right)
     t = torch.squeeze(tx[..., 0]).cuda()
     x = torch.squeeze(tx[..., 1:]).cuda()
 
@@ -64,8 +66,9 @@ def LHS_pde(func, tx):  # changed to let this use the pair (learnable_tree, bs_a
     print(du[:, 1:].unsqueeze(1).repeat(1, z.shape[0], 1).shape)
     print(z_large.shape)
 
-    integrand = (u_shift - u.unsqueeze(1).repeat(1, z.shape[0]) - (du[:, 1:].repeat(1, z.shape[0]) * z_large)) * \
-                nu.unsqueeze(0).repeat(tx.shape[0], 1) * (right-left)/z.shape[0]
+    integrand = (u_shift - u.unsqueeze(1).repeat(1, z.shape[0]) -
+                 torch.sum(du[:, 1:].unsqueeze(1).repeat(1, z.shape[0], 1) * z_large, dim=-1)) * \
+                 nu.unsqueeze(0).repeat(tx.shape[0], 1) * (right - left) / z.shape[0]
     integral_dz = torch.sum(integrand, dim=-1)
 
     return ut + epsilon / 2 * x * ux + 1 / 2 * theta ** 2 * trace_hessian + integral_dz
@@ -78,13 +81,13 @@ def RHS_pde(tx):
     lam = .3
     epsilon = .25
     theta = .3
-    norm = 1/(tx.shape[1] - 1) * torch.sum(tx[:,1:]**2, dim=-1)
+    norm = 1 / (tx.shape[1] - 1) * torch.sum(tx[:, 1:] ** 2, dim=-1)
     return epsilon * norm + theta ** 2 + \
         (lam * (mu ** 2 + sigma ** 2))
 
 
 def true_solution(tx):
-    return torch.sum(tx[:,1:]**2, dim=-1).unsqueeze(1)
+    return torch.sum(tx[:, 1:] ** 2, dim=-1).unsqueeze(1)
 
 
 unary_functions = [lambda x: 0 * x ** 2,
