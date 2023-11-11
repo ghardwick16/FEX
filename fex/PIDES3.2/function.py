@@ -4,7 +4,7 @@ from torch import sin, cos, exp
 import math
 
 
-def get_jumps(tx, u, lam, mu, sigma, domain):
+def get_jumps(lam, mu, sigma, domain):
     # sample poisson and norma dists for jump times and jumps
     jump_t_dist = torch.distributions.exponential.Exponential(lam)
     jump_dist = torch.distributions.normal.Normal(mu, sigma)
