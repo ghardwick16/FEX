@@ -18,7 +18,6 @@ def apply_jumps(tx, u, lam, mu, sigma, domain):
     else:
         i = 0
         for time in times:
-            print(i)
             idxs = torch.where(tx[..., 0] > time)
             u[idxs] += jumps[i]
             i += 1
