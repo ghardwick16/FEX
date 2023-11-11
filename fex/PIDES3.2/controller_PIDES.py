@@ -577,7 +577,7 @@ def get_reward(bs, actions, learnable_tree, tree_params, tree_optim):
         x1 = (torch.rand(args.domainbs, args.dim - 1).cuda()) * (args.right - args.left) + args.left
         x = torch.cat((t, x1), 1)
         x.requires_grad = True
-        times, jumps = func.get_jumps(lam=.3, mu=.4, sigma=.25)
+        times, jumps = func.get_jumps(lam=.3, mu=.4, sigma=.25, domain=[0,1])
 
         bs_action = [v[bs_idx] for v in actions]
         lhs_func = (learnable_tree, bs_action)
