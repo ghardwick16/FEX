@@ -4,7 +4,7 @@ from torch import sin, cos, exp
 import math
 
 
-def apply_jumps(tx, u, lam, mu, sigma, domain):
+def get_jumps(tx, u, lam, mu, sigma, domain):
     # sample poisson and norma dists for jump times and jumps
     jump_t_dist = torch.distributions.exponential.Exponential(lam)
     jump_dist = torch.distributions.normal.Normal(mu, sigma)
@@ -13,6 +13,8 @@ def apply_jumps(tx, u, lam, mu, sigma, domain):
         jump_times.append(sum(jump_times) + jump_t_dist.sample())
     times = jump_times[1:-1]
     jumps = jump_dist.sample([len(jump_times) - 2])
+    return times, jumps
+def apply_jumps(tx, u, times, jumps):
     if len(times) == 0:
         return u
     else:
@@ -24,7 +26,7 @@ def apply_jumps(tx, u, lam, mu, sigma, domain):
         return u
 
 
-def LHS_pde(func, tx):  # changed to let this use the pair (learnable_tree, bs_action) for computation directly
+def LHS_pde(func, tx, jumps, times):  # changed to let this use the pair (learnable_tree, bs_action) for computation directly
     mu = .4
     sigma = .25
     lam = .3
@@ -44,7 +46,7 @@ def LHS_pde(func, tx):  # changed to let this use the pair (learnable_tree, bs_a
     else:
         u_func = lambda y: func(y)
 
-    u = torch.squeeze(apply_jumps(tx, u_func(tx), lam, mu, sigma, domain=[0, 1]))
+    u = torch.squeeze(apply_jumps(tx, u_func(tx), times, jumps))
 
     u_expz = torch.squeeze(u_func(tx_expz))
     v = torch.ones(u.shape).cuda()
