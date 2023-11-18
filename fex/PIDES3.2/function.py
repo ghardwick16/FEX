@@ -32,7 +32,7 @@ def LHS_pde(func, tx):  # changed to let this use the pair (learnable_tree, bs_a
     ux = du[:, 1].cuda()
     exp_z = torch.exp(z).cuda()
     print(u_expz.shape)
-    print(u.repeat(z.shape[0], 1).shape)
+    print(u.repeat(1, z.shape[0]).shape)
     print(x.repeat(z.shape[0], 1).shape)
     print(exp_z.shape)
     print(ux.shape)
