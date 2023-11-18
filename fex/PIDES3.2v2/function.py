@@ -36,7 +36,7 @@ def get_paths(num_samples):
     # by factoring out an x_t from the calculation below we can subtract and add values to the jump matrix to make the computation a bit faster
     jump_mat = jump_mat.reshape((num_samples, steps))
     jump_term = torch.exp(jump_mat.reshape((num_samples, steps))) - lam / steps * (
-                torch.exp(torch.tensor([mu + 1 / 2 * sigma ** 2])) - 1)
+                torch.exp(torch.tensor([mu + 1 / 2 * sigma ** 2]).cuda()) - 1)
     # step 2: calculate trajectory of x_t
     x_t = torch.empty_like(jump_mat).cuda()
     x_t.requires_grad = True
