@@ -3,30 +3,7 @@ import torch
 from torch import sin, cos, exp
 import math
 
-
-def get_jumps(lam, mu, sigma, domain):
-    # sample poisson and norma dists for jump times and jumps
-    jump_t_dist = torch.distributions.exponential.Exponential(lam)
-    jump_dist = torch.distributions.normal.Normal(mu, sigma)
-    jump_times = [0]
-    while jump_times[-1] < domain[1]:
-        jump_times.append(sum(jump_times) + jump_t_dist.sample())
-    times = jump_times[1:-1]
-    jumps = jump_dist.sample([len(jump_times) - 2])
-    return times, jumps
-def apply_jumps(tx, u, times, jumps):
-    if len(times) == 0:
-        return u
-    else:
-        i = 0
-        for time in times:
-            idxs = torch.where(tx[..., 0] > time)
-            u[idxs] += jumps[i]
-            i += 1
-        return u
-
-
-def LHS_pde(func, tx, jumps, times):  # changed to let this use the pair (learnable_tree, bs_action) for computation directly
+def LHS_pde(func, tx):  # changed to let this use the pair (learnable_tree, bs_action) for computation directly
     mu = .4
     sigma = .25
     lam = .3
@@ -46,7 +23,7 @@ def LHS_pde(func, tx, jumps, times):  # changed to let this use the pair (learna
     else:
         u_func = lambda y: func(y)
 
-    u = torch.squeeze(apply_jumps(tx, u_func(tx), times, jumps))
+    u = u_func(tx)
 
     u_expz = torch.squeeze(u_func(tx_expz))
     v = torch.ones(u.shape).cuda()
@@ -58,7 +35,6 @@ def LHS_pde(func, tx, jumps, times):  # changed to let this use the pair (learna
             exp_z.repeat(tx.shape[0], 1) - 1) * ux.repeat(z.shape[0], 1).T) * nu.repeat(tx.shape[0], 1)
     integral_dz = torch.trapezoid(integrand, z, dim=1)
     return ut + integral_dz
-
 
 def RHS_pde(tx):
     bs = tx.size(0)
