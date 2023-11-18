@@ -79,7 +79,7 @@ def get_loss(func, true, x_t, jump_mat):
     u_tx = u(torch.cat((t.unsqueeze(2), x_t.unsqueeze(2)), dim=2))
     u_expz = torch.squeeze(u(tx_expz))
     n2 = lam * (torch.trapezoid(u_expz * phi.unsqueeze(1).repeat(x_t.shape[0], 1, x_t.shape[1]),
-                                dx=(right - left) / num_pts, dim=1) - u_tx)
+                                dx=(domain[1] - domain[0]) / num_pts, dim=1) - u_tx)
     loss1 = torch.mean((u_exp_jumps[..., :-1] - dt * n2[..., :-1] - u_tx[..., 1:]) ** 2)
 
     # Step 2:  loss2
