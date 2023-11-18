@@ -15,7 +15,7 @@ def get_paths(num_samples):
     jump_t_dist = torch.distributions.exponential.Exponential(lam)
     jump_dist = torch.distributions.normal.Normal(mu, sigma)
     jump_mat = torch.zeros(steps * num_samples).cuda()
-    jump_mat.requires_grad = True
+    # jump_mat.requires_grad = True
     jump_t = 0
     prev = 0
     done = False
