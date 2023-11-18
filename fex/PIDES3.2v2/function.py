@@ -68,7 +68,7 @@ def get_loss(func, true, x_t, jump_mat):
     # that only one jump occurs per time step, so the sum is a single value (in practice, if
     # two jumps occur, we simply sum them)
     z = torch.linspace(start=domain[0], end=domain[1], steps=num_pts).cuda()
-    phi = 1 / (torch.sqrt(2 * torch.Tensor([math.pi]) * sigma)) * torch.exp(-.5 / sigma ** 2 * (z - mu) ** 2)
+    phi = 1 / (torch.sqrt(2 * torch.Tensor([math.pi]).cuda() * sigma)) * torch.exp(-.5 / sigma ** 2 * (z - mu) ** 2)
     t = torch.linspace(start=domain[0], end=domain[1], steps=x_t.shape[1]).repeat(x_t.shape[0], 1).cuda()
     # dims are (integration pts, batch_size, time steps, dims)
     tx_expz = torch.cat((t.unsqueeze(1).repeat(1, num_pts, 1).unsqueeze(3), (
