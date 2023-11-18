@@ -39,7 +39,6 @@ def get_paths(num_samples):
                 torch.exp(torch.tensor([mu + 1 / 2 * sigma ** 2]).cuda()) - 1)
     # step 2: calculate trajectory of x_t
     x_t = torch.empty_like(jump_mat).cuda()
-    x_t.requires_grad = True
     x_t[:, 0] = x_0
     for i in range(steps - 1):
         x_t[:, i + 1] = x_t[:, i] * jump_term[:, i]

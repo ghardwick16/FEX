@@ -602,6 +602,8 @@ def get_reward(bs, actions, learnable_tree, tree_params, tree_optim):
 
     for bs_idx in range(batch_size):
         x_t, jump_mat = func.get_paths(num_paths)
+        x_t.requires_grad = True
+        jump_mat.requires_grad = True
         bs_action = [v[bs_idx] for v in actions]
         cand_func = (learnable_tree, bs_action)
         # regression_error = torch.nn.functional.mse_loss(learnable_tree(x, bs_action), func.true_solution(x))
@@ -652,6 +654,8 @@ def get_reward(bs, actions, learnable_tree, tree_params, tree_optim):
         # regression_error = function_error + 100*bd_error
         # print('loss after: ', regression_error.item())
         x_t, jump_mat = func.get_paths(num_paths)
+        x_t.requires_grad = True
+        jump_mat.requires_grad = True
         loss = func.get_loss(cand_func, func.true_solution, x_t, jump_mat)
         print(f'loss after, {loss}')
         error_hist.append(loss.item())
@@ -683,6 +687,8 @@ def best_error(best_action, learnable_tree):
     # x = torch.cat((t, x1), 1)
     # x.requires_grad = True
     x_t, jump_mat = func.get_paths(num_paths)
+    x_t.requires_grad = True
+    jump_mat.requires_grad = True
     bs_action = best_action
 
     lhs_func = (learnable_tree, bs_action)
