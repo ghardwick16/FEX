@@ -84,7 +84,7 @@ def get_loss(func, true, x_t, jump_mat):
     loss1 = torch.mean((u_exp_jumps[..., :-1] - dt * n2[..., :-1] - u_tx[..., 1:]) ** 2)
 
     # Step 2:  loss2
-    final_xt = torch.cat((t[:, -1].unsqueeze(1), x_t[:, -1].unsqueeze(1)), dim=1)
+    final_xt = torch.cat((t[:, -1].unsqueeze(1), x_t[:, -1].unsqueeze(1)), dim=1).cuda()
     #final_xt.requires_grad = True
     u_final = u(final_xt)
     true_final = true(final_xt)
