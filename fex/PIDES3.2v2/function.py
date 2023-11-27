@@ -88,13 +88,13 @@ def get_loss(func, true, x_t, jump_mat):
     #final_xt.requires_grad = True
     u_final = u(final_xt)
     true_final = true(final_xt)
-    loss2 = torch.mean(u_final - true_final)
+    loss2 = torch.mean(torch.abs(u_final - true_final))
 
     # Step 3: loss3
     v = torch.ones(u_final.shape).cuda()
     du = torch.autograd.grad(u_final, final_xt, grad_outputs=v, create_graph=True)[0]
     dg = torch.autograd.grad(true_final, final_xt, grad_outputs=v, create_graph=True)[0]
-    loss3 = torch.mean(du[:, 1:] - dg[:, 1:])
+    loss3 = torch.mean(torch.abs(du[:, 1:] - dg[:, 1:]))
 
     # Step 4: add them up
     loss = loss1 + loss2 + loss3
