@@ -81,7 +81,7 @@ def get_loss(func, true, x_t, jump_mat):
     tx_shift = tx.unsqueeze(2).repeat(1, 1, z.shape[0], 1)
     tx_shift[:, :, :, 1:] += z_large
     u_shift = u(tx_shift).squeeze()
-    u_tx = u(tx)
+    u_tx = u(tx).squeeze()
     # (t, x_j + G(x,z))
     tx_z = tx
     tx_z[..., 1:] += jump_mat
