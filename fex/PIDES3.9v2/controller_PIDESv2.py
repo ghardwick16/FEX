@@ -23,7 +23,7 @@ parser.add_argument('--greedy', default=0, type=float)
 parser.add_argument('--random_step', default=0, type=float)
 parser.add_argument('--ckpt', default='', type=str)
 parser.add_argument('--gpu', default=0, type=int)
-parser.add_argument('--dim', default=2, type=int)
+parser.add_argument('--dim', default=5, type=int)
 parser.add_argument('--tree', default='depth2', type=str)
 parser.add_argument('--lr', default=1e-2, type=float)
 parser.add_argument('--percentile', default=0.5, type=float)
@@ -601,7 +601,7 @@ def get_reward(bs, actions, learnable_tree, tree_params, tree_optim):
     global count, leaves_cnt
 
     for bs_idx in range(batch_size):
-        x_t, jump_mat = func.get_paths(num_paths)
+        x_t, jump_mat = func.get_paths(num_paths, dims=args.dim-1)
         x_t.requires_grad = True
         jump_mat.requires_grad = True
         bs_action = [v[bs_idx] for v in actions]
