@@ -23,13 +23,13 @@ parser.add_argument('--greedy', default=0, type=float)
 parser.add_argument('--random_step', default=0, type=float)
 parser.add_argument('--ckpt', default='', type=str)
 parser.add_argument('--gpu', default=0, type=int)
-parser.add_argument('--dim', default=4, type=int)
+parser.add_argument('--dim', default=2, type=int)
 parser.add_argument('--tree', default='depth2', type=str)
 parser.add_argument('--lr', default=1e-2, type=float)
 parser.add_argument('--percentile', default=0.5, type=float)
 parser.add_argument('--base', default=100, type=int)
-parser.add_argument('--domainbs', default=1000, type=int)
-parser.add_argument('--bdbs', default=1000, type=int)
+# parser.add_argument('--domainbs', default=1000, type=int)
+# parser.add_argument('--bdbs', default=1000, type=int)
 args = parser.parse_args()
 
 os.environ['CUDA_VISIBLE_DEVICES'] = str(args.gpu)
@@ -43,12 +43,14 @@ binary_functions_str = func.binary_functions_str
 left = args.left
 right = args.right
 dim = args.dim
+num_paths = 100
+
 
 def get_boundary(num_pts, dim):
     bd_pts = (torch.rand(num_pts, dim).cuda()) * (args.right - args.left) + args.left
-    bd_pts[:, 0] = 1 #the 0th index would be for time, which we want to be one since the
-                     #given boundary condition is u(T,x) = x and T = max time  = 1 since we
-                     #let t be in [0,1]
+    bd_pts[:, 0] = 1  # the 0th index would be for time, which we want to be one since the
+    # given boundary condition is u(T,x) = x and T = max time  = 1 since we
+    # let t be in [0,1]
     return bd_pts
 
 
@@ -57,6 +59,7 @@ class candidate(object):
         self.action = action
         self.expression = expression
         self.error = error
+
 
 class SaveBuffer(object):
     def __init__(self, max_size):
@@ -86,6 +89,7 @@ class SaveBuffer(object):
 
         if len(self.candidates) > self.max_size:
             self.candidates.pop(-1)  # remove the last one
+
 
 if args.tree == 'depth2':
     def basic_tree():
@@ -125,6 +129,8 @@ elif args.tree == 'depth2_rml':
 
 elif args.tree == 'depth2_rmu':
     print('**************************rmu**************************')
+
+
     def basic_tree():
         tree = BinaryTree('', False)
 
@@ -141,6 +147,8 @@ elif args.tree == 'depth2_rmu':
 
 elif args.tree == 'depth2_rmu2':
     print('**************************rmu2**************************')
+
+
     def basic_tree():
         tree = BinaryTree('', False)
 
@@ -186,6 +194,8 @@ elif args.tree == 'depth3':
 
 elif args.tree == 'depth2_sub':
     print('**************************sub**************************')
+
+
     def basic_tree():
         tree = BinaryTree('', True)
 
@@ -200,12 +210,15 @@ elif args.tree == 'depth2_sub':
 
 structure = []
 
+
 def inorder_structure(tree):
     global structure
     if tree:
         inorder_structure(tree.leftChild)
         structure.append(tree.is_unary)
         inorder_structure(tree.rightChild)
+
+
 inorder_structure(basic_tree())
 print('tree structure', structure)
 
@@ -275,6 +288,7 @@ leaves_index = []
 leaves = 0
 count = 0
 
+
 def inorder_structure(tree):
     global structure, leaves, count, leaves_index
     if tree:
@@ -301,10 +315,12 @@ for is_unary in structure:
         structure_choice.append(len(binary))
 print('tree structure choices', structure_choice)
 
+
 def reset_params(tree_params):
     for v in tree_params:
         # v.data.fill_(0.01)
         v.data.normal_(0.0, 0.1)
+
 
 def inorder(tree, actions):
     global count
@@ -322,13 +338,14 @@ def inorder(tree, actions):
         count = count + 1
         inorder(tree.rightChild, actions)
 
+
 def inorder_visualize(tree, actions, trainable_tree):
     global count, leaves_cnt
     if tree:
         leftfun = inorder_visualize(tree.leftChild, actions, trainable_tree)
         action = actions[count].item()
         # print('123', tree.key)
-        if tree.is_unary:# and not tree.key.is_leave:
+        if tree.is_unary:  # and not tree.key.is_leave:
             if count not in leaves_index:
                 midfun = unary_functions_str[action]
                 a = trainable_tree.learnable_operator_set[count][action].a.item()
@@ -351,10 +368,10 @@ def inorder_visualize(tree, actions, trainable_tree):
             expression = ''
             for i in range(0, dim):
                 # print(midfun)
-                x_expression = midfun.format('x'+str(i))
-                expression = expression + ('{:.4f}*{}'+'+').format(w[i], x_expression)
-            expression = expression+'{:.4f}'.format(bias)
-            expression = '('+expression+')'
+                x_expression = midfun.format('x' + str(i))
+                expression = expression + ('{:.4f}*{}' + '+').format(w[i], x_expression)
+            expression = expression + '{:.4f}'.format(bias)
+            expression = '(' + expression + ')'
             # print('visualize', count, leaves_cnt, action)
             return expression
         elif leftfun is not None and rightfun is None:
@@ -372,13 +389,15 @@ def inorder_visualize(tree, actions, trainable_tree):
     else:
         return None
 
+
 def get_function(actions):
     global count
     count = 0
     computation_tree = basic_tree()
     inorder(computation_tree, actions)
-    count = 0 # 置零
+    count = 0  # 置零
     return computation_tree
+
 
 def inorder_params(tree, actions, unary_choices):
     global count
@@ -393,18 +412,20 @@ def inorder_params(tree, actions, unary_choices):
             # print(count, action, func.unary_functions_str[action])
         else:
             action = action
-            tree.key = unary_choices[count][len(unary)+action]
+            tree.key = unary_choices[count][len(unary) + action]
             # print(count, action, func.binary_functions_str[action], tree.key(torch.tensor([1]).cuda(), torch.tensor([2]).cuda()))
         count = count + 1
         inorder_params(tree.rightChild, actions, unary_choices)
+
 
 def get_function_trainable_params(actions, unary_choices):
     global count
     count = 0
     computation_tree = basic_tree()
     inorder_params(computation_tree, actions, unary_choices)
-    count = 0 # 置零
+    count = 0  # 置零
     return computation_tree
+
 
 class unary_operation(nn.Module):
     def __init__(self, operator, is_leave):
@@ -421,7 +442,8 @@ class unary_operation(nn.Module):
         if self.is_leave:
             return self.unary(x)
         else:
-            return self.a*self.unary(x)+self.b
+            return self.a * self.unary(x) + self.b
+
 
 class binary_operation(nn.Module):
     def __init__(self, operator):
@@ -433,16 +455,19 @@ class binary_operation(nn.Module):
         # self.b = nn.Parameter(torch.Tensor(1).cuda())
         # # self.b.data.fill_(0)
         # nn.init.normal_(self.b.data, 0, 0.5)
+
     def forward(self, x, y):
         # return self.binary(torch.sigmoid(self.a)*x, torch.sigmoid(self.b)*y)
         # print('unary', self.a, self.b)
         return self.binary(x, y)
 
+
 leaves_cnt = 0
+
 
 def compute_by_tree(tree, linear, x):
     ''' judge whether a emtpy tree, if yes, that means the leaves and call the unary operation '''
-    if tree.leftChild == None and tree.rightChild == None: # leaf node
+    if tree.leftChild == None and tree.rightChild == None:  # leaf node
         global leaves_cnt
         transformation = linear[leaves_cnt]
         leaves_cnt = leaves_cnt + 1
@@ -453,6 +478,7 @@ def compute_by_tree(tree, linear, x):
         return tree.key(compute_by_tree(tree.leftChild, linear, x))
     else:
         return tree.key(compute_by_tree(tree.leftChild, linear, x), compute_by_tree(tree.rightChild, linear, x))
+
 
 class learnable_compuatation_tree(nn.Module):
     def __init__(self):
@@ -467,8 +493,8 @@ class learnable_compuatation_tree(nn.Module):
                 self.learnable_operator_set[i].append(binary_operation(binary[j]))
         self.linear = []
         for num, i in enumerate(range(leaves)):
-            linear_module = torch.nn.Linear(dim, 1, bias=True).cuda() #set only one variable
-            linear_module.weight.data.normal_(0, 1/math.sqrt(dim))
+            linear_module = torch.nn.Linear(dim, 1, bias=True).cuda()  # set only one variable
+            linear_module.weight.data.normal_(0, 1 / math.sqrt(dim))
             # linear_module.weight.data[0, num%2] = 1
             linear_module.bias.data.fill_(0)
             self.linear.append(linear_module)
@@ -477,10 +503,12 @@ class learnable_compuatation_tree(nn.Module):
         # print(len(bs_action))
         global leaves_cnt
         leaves_cnt = 0
-        function = lambda y: compute_by_tree(get_function_trainable_params(bs_action, self.learnable_operator_set), self.linear, y)
+        function = lambda y: compute_by_tree(get_function_trainable_params(bs_action, self.learnable_operator_set),
+                                             self.linear, y)
         out = function(x)
         leaves_cnt = 0
         return out
+
 
 class Controller(torch.nn.Module):
     """Based on
@@ -488,6 +516,7 @@ class Controller(torch.nn.Module):
     Base the controller RNN on the GRU from:
     https://github.com/ikostrikov/pytorch-a2c-ppo-acktr/blob/master/model.py
     """
+
     def __init__(self):
         torch.nn.Module.__init__(self)
 
@@ -500,18 +529,18 @@ class Controller(torch.nn.Module):
         self.output_size = sum(structure_choice)
 
         self._fc_controller = nn.Sequential(
-            nn.Linear(self.input_size,self.hidden_size),
+            nn.Linear(self.input_size, self.hidden_size),
             nn.ReLU(inplace=True),
-            nn.Linear(self.hidden_size,self.output_size))
+            nn.Linear(self.hidden_size, self.output_size))
 
-    def forward(self,x):
+    def forward(self, x):
         logits = self._fc_controller(x)
 
         logits /= self.softmax_temperature
 
         # exploration # ??
         if self.mode == 'train':
-            logits = (self.tanh_c*F.tanh(logits))
+            logits = (self.tanh_c * F.tanh(logits))
 
         return logits
 
@@ -527,21 +556,21 @@ class Controller(torch.nn.Module):
         actions = []
         total_logits = self.forward(inputs)
 
-        cumsum = np.cumsum([0]+structure_choice)
+        cumsum = np.cumsum([0] + structure_choice)
         for idx in range(len(structure_choice)):
-            logits = total_logits[:, cumsum[idx]:cumsum[idx+1]]
+            logits = total_logits[:, cumsum[idx]:cumsum[idx + 1]]
 
             probs = F.softmax(logits, dim=-1)
             log_prob = F.log_softmax(logits, dim=-1)
             # print(probs)
-            if step>=args.random_step:
+            if step >= args.random_step:
                 action = probs.multinomial(num_samples=1).data
             else:
                 action = torch.randint(0, structure_choice[idx], size=(batch_size, 1)).cuda()
             # print('old', action)
-            if args.greedy != 0:
+            if args.greedy is not 0:
                 for k in range(args.bs):
-                    if np.random.rand(1)<args.greedy:
+                    if np.random.rand(1) < args.greedy:
                         choice = random.choices(range(structure_choice[idx]), k=1)
                         action[k] = choice[0]
             # print('new', action)
@@ -551,7 +580,7 @@ class Controller(torch.nn.Module):
             log_probs.append(selected_log_prob[:, 0:1])
             actions.append(action[:, 0:1])
 
-        log_probs = torch.cat(log_probs, dim=1)   # 3*18
+        log_probs = torch.cat(log_probs, dim=1)  # 3*18
         # print(actions)
         return actions, log_probs
 
@@ -560,13 +589,9 @@ class Controller(torch.nn.Module):
         return (tools.get_variable(zeros, True, requires_grad=False),
                 tools.get_variable(zeros.clone(), True, requires_grad=False))
 
-def get_reward(bs, actions, learnable_tree, tree_params, tree_optim):
 
+def get_reward(bs, actions, learnable_tree, tree_params, tree_optim):
     # x = (torch.rand(args.domainbs, dim).cuda())*(args.right-args.left)+args.left
-    t = torch.rand(args.domainbs, 1).cuda()
-    x1 = (torch.rand(args.domainbs, args.dim - 1).cuda()) * (args.right - args.left) + args.left
-    x = torch.cat((t, x1), 1)
-    x.requires_grad = True
 
     # print(x)
     regression_errors = []
@@ -576,40 +601,44 @@ def get_reward(bs, actions, learnable_tree, tree_params, tree_optim):
     global count, leaves_cnt
 
     for bs_idx in range(batch_size):
-
+        x_t, jump_mat = func.get_paths(num_paths)
+        x_t.requires_grad = True
+        jump_mat.requires_grad = True
         bs_action = [v[bs_idx] for v in actions]
-        lhs_func = (learnable_tree, bs_action)
+        cand_func = (learnable_tree, bs_action)
         # regression_error = torch.nn.functional.mse_loss(learnable_tree(x, bs_action), func.true_solution(x))
 
         reset_params(tree_params)
         tree_optim = torch.optim.Adam(tree_params, lr=0.001)
         for _ in range(20):
-            bd_pts = get_boundary(args.bdbs, dim)
-            bc_true = func.true_solution(bd_pts)
-            bd_nn = learnable_tree(bd_pts, bs_action)
-            bd_error = torch.nn.functional.mse_loss(bc_true, bd_nn)
+            # bd_pts = get_boundary(args.bdbs, dim)
+            # bc_true = func.true_solution(bd_pts)
+            # bd_nn = learnable_tree(bd_pts, bs_action)
+            # bd_error = torch.nn.functional.mse_loss(bc_true, bd_nn)
 
             # changing LHS_pde function to simply take the learnable tree directly for ease of computation of the
             # integral
-            function_error = torch.nn.functional.mse_loss(func.LHS_pde(lhs_func, x), func.RHS_pde(x))
-            loss = function_error + 100*bd_error
+            # function_error = torch.nn.functional.mse_loss(func.LHS_pde(lhs_func, x), func.RHS_pde(x))
+            loss = func.get_loss(cand_func, func.true_solution, x_t, jump_mat)
             tree_optim.zero_grad()
             loss.backward()
             tree_optim.step()
 
-        tree_optim = torch.optim.LBFGS(tree_params, lr=1, max_iter=30)
+        tree_optim = torch.optim.LBFGS(tree_params, lr=1, max_iter=20)
         print('---------------------------------- batch idx {} -------------------------------------'.format(bs_idx))
 
         error_hist = []
+
         def closure():
             tree_optim.zero_grad()
 
-            bd_pts = get_boundary(args.bdbs, dim)
-            bc_true = func.true_solution(bd_pts)
-            bd_nn = learnable_tree(bd_pts, bs_action)
-            bd_error = torch.nn.functional.mse_loss(bc_true, bd_nn)
-            function_error = torch.nn.functional.mse_loss(func.LHS_pde(lhs_func, x), func.RHS_pde(x))
-            loss = function_error + 100*bd_error
+            # bd_pts = get_boundary(args.bdbs, dim)
+            # bc_true = func.true_solution(bd_pts)
+            # bd_nn = learnable_tree(bd_pts, bs_action)
+            # bd_error = torch.nn.functional.mse_loss(bc_true, bd_nn)
+            # function_error = torch.nn.functional.mse_loss(func.LHS_pde(lhs_func, x),
+            #                                              func.RHS_pde(x))
+            loss = func.get_loss(cand_func, func.true_solution, x_t, jump_mat)
             print('loss before: ', loss.item())
             error_hist.append(loss.item())
             loss.backward()
@@ -617,16 +646,19 @@ def get_reward(bs, actions, learnable_tree, tree_params, tree_optim):
 
         tree_optim.step(closure)
 
-
-        function_error = torch.nn.functional.mse_loss(func.LHS_pde(lhs_func, x), func.RHS_pde(x))
-        bd_pts = get_boundary(args.bdbs, dim)
-        bc_true = func.true_solution(bd_pts)
-        bd_nn = learnable_tree(bd_pts, bs_action)
-        bd_error = torch.nn.functional.mse_loss(bc_true, bd_nn)
-        regression_error = function_error + 100*bd_error
+        # function_error = torch.nn.functional.mse_loss(func.LHS_pde(lhs_func, x), func.RHS_pde(x))
+        # bd_pts = get_boundary(args.bdbs, dim)
+        # bc_true = func.true_solution(bd_pts)
+        # bd_nn = learnable_tree(bd_pts, bs_action)
+        # bd_error = torch.nn.functional.mse_loss(bc_true, bd_nn)
+        # regression_error = function_error + 100*bd_error
         # print('loss after: ', regression_error.item())
-        print('loss after, bd error: {}  '.format(bd_error.item()), ' eigen: {} '.format(function_error.item()))
-        error_hist.append(regression_error.item())
+        x_t, jump_mat = func.get_paths(num_paths)
+        x_t.requires_grad = True
+        jump_mat.requires_grad = True
+        loss = func.get_loss(cand_func, func.true_solution, x_t, jump_mat)
+        print(f'loss after, {loss}')
+        error_hist.append(loss.item())
 
         print(error_hist, ' min: ', min(error_hist))
         regression_errors.append(min(error_hist))
@@ -638,39 +670,42 @@ def get_reward(bs, actions, learnable_tree, tree_params, tree_optim):
         leaves_cnt = 0
         formulas.append(formula)
 
-
     return regression_errors, formulas
+
 
 def discount(x, amount):
     return scipy.signal.lfilter([1], [1, -amount], x[::-1], axis=0)[::-1]
 
+
 def true(x):
-    return -0.5*(torch.sum(x**2, dim=1, keepdim=True))
+    return -0.5 * (torch.sum(x ** 2, dim=1, keepdim=True))
+
 
 def best_error(best_action, learnable_tree):
-
-    t = torch.rand(args.domainbs, 1).cuda()
-    x1 = (torch.rand(args.domainbs, args.dim - 1).cuda()) * (args.right - args.left) + args.left
-    x = torch.cat((t, x1), 1)
-    x.requires_grad = True
+    # t = torch.rand(args.domainbs, 1).cuda()
+    # x1 = (torch.rand(args.domainbs, args.dim - 1).cuda()) * (args.right - args.left) + args.left
+    # x = torch.cat((t, x1), 1)
+    # x.requires_grad = True
+    x_t, jump_mat = func.get_paths(num_paths)
+    x_t.requires_grad = True
+    jump_mat.requires_grad = True
     bs_action = best_action
 
     lhs_func = (learnable_tree, bs_action)
 
+    # bd_pts = get_boundary(args.bdbs, dim)
+    # bc_true = func.true_solution(bd_pts)
+    # bd_nn = learnable_tree(bd_pts, bs_action)
+    # bd_error = torch.nn.functional.mse_loss(bc_true, bd_nn)
+    # function_error = torch.nn.functional.mse_loss(func.LHS_pde(lhs_func, x), func.RHS_pde(x))
+    regression_error = func.get_loss(lhs_func, func.true_solution, x_t, jump_mat)
 
-    bd_pts = get_boundary(args.bdbs, dim)
-    bc_true = func.true_solution(bd_pts)
-    bd_nn = learnable_tree(bd_pts, bs_action)
-    bd_error = torch.nn.functional.mse_loss(bc_true, bd_nn)
-    function_error = torch.nn.functional.mse_loss(func.LHS_pde(lhs_func, x), func.RHS_pde(x))
-    regression_error = function_error + 100 * bd_error
-
-    print('bd error: {}  '.format(bd_error.item()), ' eigen: {} '.format(function_error.item()))
+    print(f'error: {regression_error}')
 
     return regression_error
 
-def train_controller(Controller, Controller_optim, trainable_tree, tree_params, hyperparams):
 
+def train_controller(Controller, Controller_optim, trainable_tree, tree_params, hyperparams):
     ### obtain a new file name ###
     file_name = os.path.join(hyperparams['checkpoint'], 'log{}.txt')
     file_idx = 0
@@ -699,7 +734,7 @@ def train_controller(Controller, Controller_optim, trainable_tree, tree_params, 
             binary_code = binary_code + str(action[0].item())
 
         rewards, formulas = get_reward(bs, actions, trainable_tree, tree_params, tree_optim)
-        rewards = torch.cuda.FloatTensor(rewards).view(-1,1)
+        rewards = torch.cuda.FloatTensor(rewards).view(-1, 1)
         # discount
         if 1 > hyperparams['discount'] > 0:
             rewards = discount(rewards, hyperparams['discount'])
@@ -719,7 +754,8 @@ def train_controller(Controller, Controller_optim, trainable_tree, tree_params, 
         candidates.add_new(candidate(action=batch_min_action, expression=batch_best_formula, error=batch_smallest))
 
         for candidate_ in candidates.candidates:
-            print('error:{} action:{} formula:{}'.format(candidate_.error.item(), [v.item() for v in candidate_.action], candidate_.expression))
+            print('error:{} action:{} formula:{}'.format(candidate_.error.item(), [v.item() for v in candidate_.action],
+                                                         candidate_.expression))
 
         # moving average baseline
         if baseline is None:
@@ -752,21 +788,22 @@ def train_controller(Controller, Controller_optim, trainable_tree, tree_params, 
 
         min_error = error.min().item()
         # print('******************** ', min_error)
-        if smallest_error>min_error:
+        if smallest_error > min_error:
             smallest_error = min_error
 
             min_idx = torch.argmin(error)
             min_action = [v[min_idx] for v in actions]
             best_formula = formulas[min_idx]
 
-
         log = 'Step: {step}| Loss: {loss:.4f}| Action: {act} |Baseline: {base:.4f}| ' \
               'Reward {re:.4f} | {error:.8f} {formula}'.format(loss=loss.item(), base=baseline, act=binary_code,
                                                                re=(rewards).mean(), step=step, formula=best_formula,
                                                                error=smallest_error)
-        print('********************************************************************************************************')
+        print(
+            '********************************************************************************************************')
         print(log)
-        print('********************************************************************************************************')
+        print(
+            '********************************************************************************************************')
         if (step + 1) % 1 == 0:
             logger.append([step + 1, loss.item(), baseline, rewards.mean(), smallest_error, best_formula])
 
@@ -777,8 +814,8 @@ def train_controller(Controller, Controller_optim, trainable_tree, tree_params, 
         for v in candidate_.action:
             action_string += str(v.item()) + '-'
         logger.append([666, 0, 0, action_string, candidate_.error.item(), candidate_.expression])
-        # logger.append([666, 0, 0, 0, candidate_.error.item(), candidate_.expression]) 
-    finetune = 10000
+        # logger.append([666, 0, 0, 0, candidate_.error.item(), candidate_.expression])
+    finetune = 20000
     global count, leaves_cnt
     for candidate_ in candidates.candidates:
         trainable_tree = learnable_compuatation_tree()
@@ -795,7 +832,7 @@ def train_controller(Controller, Controller_optim, trainable_tree, tree_params, 
                 params.append(param)
 
         reset_params(params)
-        tree_optim = torch.optim.Adam(params, lr=1e-3)
+        tree_optim = torch.optim.Adam(params, lr=1e-2)
 
         for current_iter in range(finetune):
             error = best_error(candidate_.action, trainable_tree)
@@ -812,7 +849,8 @@ def train_controller(Controller, Controller_optim, trainable_tree, tree_params, 
             formula = inorder_visualize(basic_tree(), candidate_.action, trainable_tree)
             leaves_cnt = 0
             count = 0
-            suffix = 'Finetune-- Iter {current_iter} Error {error:.5f} Formula {formula}'.format(current_iter=current_iter, error=error, formula=formula)
+            suffix = 'Finetune-- Iter {current_iter} Error {error:.5f} Formula {formula}'.format(
+                current_iter=current_iter, error=error, formula=formula)
             if (current_iter + 1) % 100 == 0:
                 logger.append([current_iter, 0, 0, 0, error.item(), formula])
             # if smallest_error <= 1e-10:
@@ -830,8 +868,8 @@ def train_controller(Controller, Controller_optim, trainable_tree, tree_params, 
             t = torch.rand(100000, 1).cuda()
             x1 = (torch.rand(100000, args.dim - 1).cuda()) * (args.right - args.left) + args.left
             x = torch.cat((t, x1), 1)
-            sq_de = torch.mean((func.true_solution(x))**2)
-            sq_nu = torch.mean((func.true_solution(x)-trainable_tree(x, candidate_.action)) ** 2)
+            sq_de = torch.mean((func.true_solution(x)) ** 2)
+            sq_nu = torch.mean((func.true_solution(x) - trainable_tree(x, candidate_.action)) ** 2)
             numerators.append(sq_nu.item())
             denominators.append(sq_de.item())
 
@@ -839,11 +877,13 @@ def train_controller(Controller, Controller_optim, trainable_tree, tree_params, 
         print('relative l2 error: ', relative_l2)
         logger.append(['relative_l2', 0, 0, 0, relative_l2, 0])
 
+
 def cosine_lr(opt, base_lr, e, epochs):
     lr = 0.5 * base_lr * (math.cos(math.pi * e / epochs) + 1)
     for param_group in opt.param_groups:
         param_group["lr"] = lr
     return lr
+
 
 if __name__ == '__main__':
     controller = Controller().cuda()
@@ -854,11 +894,11 @@ if __name__ == '__main__':
     hyperparams['ema_baseline_decay'] = 0.95
     hyperparams['controller_lr'] = args.lr
     hyperparams['entropy_mode'] = 'reward'
-    hyperparams['controller_grad_clip'] = 0#10
+    hyperparams['controller_grad_clip'] = 0  # 10
     hyperparams['checkpoint'] = args.ckpt
     if not os.path.isdir(hyperparams['checkpoint']):
         mkdir_p(hyperparams['checkpoint'])
-    controller_optim = torch.optim.Adam(controller.parameters(), lr= hyperparams['controller_lr'])
+    controller_optim = torch.optim.Adam(controller.parameters(), lr=hyperparams['controller_lr'])
 
     trainable_tree = learnable_compuatation_tree()
     trainable_tree = trainable_tree.cuda()
