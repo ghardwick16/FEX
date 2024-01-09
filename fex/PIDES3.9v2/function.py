@@ -80,14 +80,12 @@ def get_loss(func, true, x_t, jump_mat):
     z_large = z.unsqueeze(-1).unsqueeze(0).unsqueeze(0).repeat(x_t.shape[0], x_t.shape[1], 1, dims)
     tx_shift = tx.unsqueeze(2).repeat(1, 1, z.shape[0], 1)
     tx_shift[:, :, :, 1:] += z_large
-    u_shift = u(tx_shift)
+    u_shift = u(tx_shift).squeeze()
     u_tx = u(tx)
     # (t, x_j + G(x,z))
     tx_z = tx
     tx_z[..., 1:] += jump_mat
     u_tx_z = u(tx_z)
-    print(u_shift.shape)
-    print(phi.shape)
     n2 = lam * (torch.trapezoid(u_shift * phi, dx=(right - left) / num_pts, dim=-1) - u_tx)
     f = lam * mu ** 2 + theta ** 2
     loss1 = torch.mean((-f * dt + u_tx_z[..., :-1] - dt * n2[..., :-1] - u_tx[..., 1:]) ** 2)
