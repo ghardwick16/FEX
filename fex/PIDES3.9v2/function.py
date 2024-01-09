@@ -46,6 +46,9 @@ def get_paths(num_samples, dims):
 
 
 def get_loss(func, true, x_t, jump_mat):
+    left = 0
+    right = 1
+    dims = x_t.shape[-1]
     num_samples = x_t.shape[0]
     if type(func) is tuple:
         learnable_tree = func[0]
