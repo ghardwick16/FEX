@@ -60,6 +60,7 @@ def get_loss(func, true, x_t, jump_mat):
     lam = .3
     steps = 50
     domain = [0, 1]
+    theta = .3
 
     num_pts = 10
     dt = (domain[1] - domain[0]) / x_t.shape[1]
@@ -67,34 +68,37 @@ def get_loss(func, true, x_t, jump_mat):
     # Loss1, TD_error at t_n is given, in (2.20).  Note that we made a simplifying assumption
     # that only one jump occurs per time step, so the sum is a single value (in practice, if
     # two jumps occur, we simply sum them)
-    z = torch.linspace(start=domain[0], end=domain[1], steps=num_pts).cuda()
+    z = torch.linspace(start=left, end=right, steps=num_pts).cuda()
     phi = 1 / (torch.sqrt(2 * torch.Tensor([math.pi]).cuda() * sigma)) * torch.exp(-.5 / sigma ** 2 * (z - mu) ** 2)
-    t = torch.linspace(start=domain[0], end=domain[1], steps=x_t.shape[1]).repeat(x_t.shape[0], 1).cuda()
+    phi = phi.unsqueeze(0).unsqueeze(0).repeat(x_t.shape[0], x_t.shape[1], 1)
+    t = torch.linspace(start=domain[0], end=domain[1], steps=x_t.shape[1]).repeat(x_t.shape[0], 1).unsqueeze(2).cuda()
+    tx = torch.cat((t, x_t), dim=2)
     # dims are (integration pts, batch_size, time steps, dims)
-    tx_expz = torch.cat((t.unsqueeze(1).repeat(1, num_pts, 1).unsqueeze(3), (
-            x_t.unsqueeze(1).repeat(1, num_pts, 1) * torch.exp(z).unsqueeze(0).repeat(num_samples, 1).unsqueeze(
-        2).repeat(1, 1, steps)).unsqueeze(3)), dim=3)
-    tx_exp_jumps = torch.cat((t.unsqueeze(2), (x_t * torch.exp(jump_mat)).unsqueeze(2)), dim=2)
-    u_exp_jumps = torch.squeeze(u(tx_exp_jumps))
-    u_tx = torch.squeeze(u(torch.cat((t.unsqueeze(2), x_t.unsqueeze(2)), dim=2)))
-    u_expz = torch.squeeze(u(tx_expz))
-    integral = torch.trapezoid(u_expz * phi.unsqueeze(1).repeat(x_t.shape[0], 1, x_t.shape[1]),
-                               dx=(domain[1] - domain[0]) / num_pts, dim=1)
-    n2 = lam * (integral - u_tx)
-    loss1 = torch.mean((u_exp_jumps[..., :-1] - dt * n2[..., :-1] - u_tx[..., 1:]) ** 2)
+    z_large = z.unsqueeze(-1).unsqueeze(0).unsqueeze(0).repeat(x_t.shape[0], x_t.shape[1], 1, dims)
+    tx_shift = tx.unsqueeze(2).repeat(1, 1, z.shape[0], 1)
+    tx_shift[:, :, :, 1:] += z_large
+    u_shift = u(tx_shift)
+    u_tx = u(tx)
+    # (t, x_j + G(x,z))
+    tx_z = tx
+    tx_z[..., 1:] += jump_mat
+    u_tx_z = u(tx_z)
+    n2 = lam * (torch.trapezoid(u_shift * phi, dx=(right - left) / num_pts, dim=-1) - u_tx)
+    f = lam * mu ** 2 + theta ** 2
+    loss1 = torch.mean((-f * dt + u_tx_z[..., :-1] - dt * n2[..., :-1] - u_tx[..., 1:]) ** 2)
 
     # Step 2:  loss2
-    final_xt = torch.cat((t[:, -1].unsqueeze(1), x_t[:, -1].unsqueeze(1)), dim=1).cuda()
-    # final_xt.requires_grad = True
-    u_final = torch.squeeze(u(final_xt))
-    true_final = torch.squeeze(true(final_xt))
-    loss2 = torch.mean(torch.abs(u_final - true_final))
+    final_xt = torch.cat((t[:, :, -1].unsqueeze(1), x_t[:, :, -1].unsqueeze(1)), dim=1).cuda()
+    final_xt.requires_grad = True
+    u_final = u(final_xt)
+    true_final = true(final_xt)
+    loss2 = torch.mean(u_final - true_final)
 
     # Step 3: loss3
     v = torch.ones(u_final.shape).cuda()
     du = torch.autograd.grad(u_final, final_xt, grad_outputs=v, create_graph=True)[0]
     dg = torch.autograd.grad(true_final, final_xt, grad_outputs=v, create_graph=True)[0]
-    loss3 = torch.mean(torch.abs(du[:, 1:] - dg[:, 1:]))
+    loss3 = torch.mean(du[:, 1:] - dg[:, 1:])
 
     # Step 4: add them up
     loss = loss1 + loss2 + loss3
@@ -103,7 +107,7 @@ def get_loss(func, true, x_t, jump_mat):
 
 
 def true_solution(tx):  # for the most simple case, u(t,x) = x
-    return tx[..., 1:]
+    return torch.mean(tx[...,1:]**2, dim=-1)
 
 
 unary_functions = [lambda x: 0 * x ** 2,
