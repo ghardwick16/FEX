@@ -95,6 +95,7 @@ def get_loss(func, true, x_t, jump_mat):
     u_final = u(final_xt)
     true_final = true(final_xt).squeeze()
     loss2 = torch.mean(u_final - true_final)
+    #ejejsj
 
     # Step 3: loss3
     v = torch.ones(u_final.shape).cuda()
