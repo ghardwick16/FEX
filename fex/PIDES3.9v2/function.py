@@ -101,12 +101,11 @@ def get_loss(func, true, x_t, jump_mat):
     du = torch.autograd.grad(u_final, final_xt, grad_outputs=v, create_graph=True)[0]
     dg = torch.autograd.grad(true_final, final_xt, grad_outputs=v, create_graph=True)[0]
     loss3 = torch.mean(du[:, 1:] - dg[:, 1:])
+    print(du)
+    print(dg)
 
     # Step 4: add them up
     loss = loss1 + loss2 + loss3
-    print(loss1)
-    print(loss2)
-    print(loss3)
 
     return loss
 
