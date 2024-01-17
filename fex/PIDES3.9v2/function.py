@@ -85,6 +85,8 @@ def get_loss(func, true, x_t, jump_mat):
     # (t, x_j + G(x,z))
     tx_z = tx
     tx_z[..., 1:] += jump_mat
+    print(tx.shape)
+    print(jump_mat.shape)
     u_tx_z = u(tx_z).squeeze()
     n2 = lam * (torch.trapezoid(u_shift * phi, dx=(right - left) / num_pts, dim=-1) - u_tx)
     f = lam * mu ** 2 + theta ** 2
