@@ -104,9 +104,6 @@ def get_loss(func, true, x_t, jump_mat):
 
     # Step 4: add them up
     loss = loss1 + loss2 + loss3
-    print(loss1)
-    print(loss2)
-    print(loss3)
 
     return loss
 
