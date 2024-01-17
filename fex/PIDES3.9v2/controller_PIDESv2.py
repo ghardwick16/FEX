@@ -888,7 +888,7 @@ def cosine_lr(opt, base_lr, e, epochs):
 if __name__ == '__main__':
     controller = Controller().cuda()
     hyperparams = {}
-
+    #32j2
     hyperparams['controller_max_step'] = args.epoch
     hyperparams['discount'] = 1.0
     hyperparams['ema_baseline_decay'] = 0.95
