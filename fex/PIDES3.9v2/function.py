@@ -94,7 +94,7 @@ def get_loss(func, true, x_t, jump_mat):
     # Step 2:  loss2
     print(t.shape)
     print(x_t.shape)
-    final_xt = torch.cat((t[:, :, -1].unsqueeze(1), x_t[:, :, -1].unsqueeze(1)), dim=1).cuda()
+    final_xt = torch.cat((t[:, -1, :].unsqueeze(1), x_t[:, -1, :].unsqueeze(1)), dim=1).cuda()
     print(final_xt.shape)
     u_final = u(final_xt)
     true_final = true(final_xt)
