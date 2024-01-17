@@ -81,7 +81,6 @@ def get_loss(func, true, x_t, jump_mat):
     tx_shift = tx.unsqueeze(2).repeat(1, 1, z.shape[0], 1)
     tx_shift[:, :, :, 1:] += z_large
     u_shift = u(tx_shift).squeeze()
-    print(tx_shift.shape)
     u_tx = u(tx).squeeze()
     # (t, x_j + G(x,z))
     tx_z = tx
@@ -92,15 +91,9 @@ def get_loss(func, true, x_t, jump_mat):
     loss1 = torch.mean((-f * dt + u_tx_z[..., :-1] - dt * n2[..., :-1] - u_tx[..., 1:]) ** 2)
 
     # Step 2:  loss2
-    print(t.shape)
-    print(x_t.shape)
     final_xt = torch.cat((t[:, -1, :].unsqueeze(1), x_t[:, -1, :].unsqueeze(1)), dim=2).cuda()
-    print(final_xt.shape)
     u_final = u(final_xt)
-    true_final = true(final_xt)
-    #### TO DO: REFORMAT FINAL_XT SO THAT THE FUNCTION CAN TAKE IT AS INPUT, SEE 3.9 NORMAL VERSION
-    print(u_final.shape)
-    print(true_final.shape)
+    true_final = true(final_xt).squeeze()
     loss2 = torch.mean(u_final - true_final)
 
     # Step 3: loss3
