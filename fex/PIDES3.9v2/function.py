@@ -76,7 +76,7 @@ def get_loss(func, true, x_t, jump_mat):
     phi = phi.unsqueeze(0).unsqueeze(0).repeat(x_t.shape[0], x_t.shape[1], 1)
     t = torch.linspace(start=domain[0], end=domain[1], steps=x_t.shape[1]).repeat(x_t.shape[0], 1).unsqueeze(2).cuda()
     tx = torch.cat((t, x_t), dim=2)
-    # dims are (integration pts, batch_size, time steps, dims)
+    # dims are (batch_size, time steps, integration points, dims)
     z_large = z.unsqueeze(-1).unsqueeze(0).unsqueeze(0).repeat(x_t.shape[0], x_t.shape[1], 1, dims)
     tx_shift = tx.unsqueeze(2).repeat(1, 1, z.shape[0], 1)
     tx_shift[:, :, :, 1:] += z_large
@@ -94,7 +94,7 @@ def get_loss(func, true, x_t, jump_mat):
     # Step 2:  loss2
     print(t.shape)
     print(x_t.shape)
-    final_xt = torch.cat((t[:, -1, :].unsqueeze(1), x_t[:, -1, :].unsqueeze(1)), dim=1).cuda()
+    final_xt = torch.cat((t[:, -1, :].unsqueeze(1), x_t[:, -1, :].unsqueeze(1)), dim=2).cuda()
     print(final_xt.shape)
     u_final = u(final_xt)
     true_final = true(final_xt)
