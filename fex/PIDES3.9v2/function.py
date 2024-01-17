@@ -92,6 +92,8 @@ def get_loss(func, true, x_t, jump_mat):
     loss1 = torch.mean((-f * dt + u_tx_z[..., :-1] - dt * n2[..., :-1] - u_tx[..., 1:]) ** 2)
 
     # Step 2:  loss2
+    print(t.shape)
+    print(x_t.shape)
     final_xt = torch.cat((t[:, :, -1].unsqueeze(1), x_t[:, :, -1].unsqueeze(1)), dim=1).cuda()
     print(final_xt.shape)
     u_final = u(final_xt)
