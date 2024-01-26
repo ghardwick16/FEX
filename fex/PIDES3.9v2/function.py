@@ -90,7 +90,7 @@ def get_loss(func, true, x_t, jump_mat):
     f = lam * mu ** 2 + theta ** 2
     v = torch.ones(u_tx.shape).cuda()
     grad_u = torch.autograd.grad(u_tx, tx, grad_outputs=v, create_graph=True)[0]
-    print(grad_u.shape)
+    print(u_tx.shape)
     loss1 = torch.mean((-f * dt + u_tx_z[..., :-1] - dt * n2[..., :-1] - u_tx[..., 1:]) ** 2)
 
     # Step 2:  loss2
