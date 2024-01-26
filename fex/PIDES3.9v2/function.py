@@ -9,6 +9,7 @@ def get_paths(num_samples, dims):
     mu = .4
     sigma = .25
     lam = .3
+    theta = .3
     steps = 50
     domain = [0, 1]
 
@@ -36,16 +37,20 @@ def get_paths(num_samples, dims):
     # by factoring out an x_t from the calculation below we can subtract and add values to the jump matrix to make the computation a bit faster
     jump_mat = jump_mat.reshape((num_samples, steps, dims))
     jump_term = torch.exp(jump_mat.reshape((num_samples, steps, dims))) - lam / steps * (
-                torch.exp(torch.tensor([mu + 1 / 2 * sigma ** 2]).cuda()) - 1)
+            torch.exp(torch.tensor([mu + 1 / 2 * sigma ** 2]).cuda()) - 1)
+    brownian_dist = torch.distributions.normal.Normal(0, 1 / steps)
+    brownian = brownian_dist.sample((num_samples, steps, dims)).cuda()
+    pre_computed = theta * brownian + jump_term - lam * mu / steps
+
     # step 2: calculate trajectories of x_t, y_t given function u
     x_t = torch.empty_like(jump_mat).cuda()
     x_t[:, 0, :] = x_0
     for i in range(steps - 1):
-        x_t[:, i + 1, :] = x_t[:, i, :] * jump_term[:, i, :]
-    return x_t, jump_mat
+        x_t[:, i + 1, :] = x_t[:, i, :] * pre_computed[:, i, :]
+    return x_t, jump_mat, brownian
 
 
-def get_loss(func, true, x_t, jump_mat):
+def get_loss(func, true, x_t, jump_mat, brownian):
     left = 0
     right = 1
     dims = x_t.shape[-1]
@@ -90,8 +95,7 @@ def get_loss(func, true, x_t, jump_mat):
     f = lam * mu ** 2 + theta ** 2
     v = torch.ones(u_tx.shape).cuda()
     grad_u = torch.autograd.grad(u_tx, tx, grad_outputs=v, create_graph=True)[0]
-    print(u_tx.shape)
-    loss1 = torch.mean((-f * dt + u_tx_z[..., :-1] - dt * n2[..., :-1] - u_tx[..., 1:]) ** 2)
+    loss1 = torch.mean((-f * dt + torch.sum(grad_u * brownian, dim=2) + u_tx_z[..., :-1] - dt * n2[..., :-1] - u_tx[..., 1:]) ** 2)
 
     # Step 2:  loss2
     final_xt = torch.cat((t[:, -1, :].unsqueeze(1), x_t[:, -1, :].unsqueeze(1)), dim=2).cuda()

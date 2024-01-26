@@ -601,7 +601,7 @@ def get_reward(bs, actions, learnable_tree, tree_params, tree_optim):
     global count, leaves_cnt
 
     for bs_idx in range(batch_size):
-        x_t, jump_mat = func.get_paths(num_paths, dims=args.dim-1)
+        x_t, jump_mat, brownian = func.get_paths(num_paths, dims=args.dim-1)
         x_t.requires_grad = True
         jump_mat.requires_grad = True
         bs_action = [v[bs_idx] for v in actions]
@@ -619,7 +619,7 @@ def get_reward(bs, actions, learnable_tree, tree_params, tree_optim):
             # changing LHS_pde function to simply take the learnable tree directly for ease of computation of the
             # integral
             # function_error = torch.nn.functional.mse_loss(func.LHS_pde(lhs_func, x), func.RHS_pde(x))
-            loss = func.get_loss(cand_func, func.true_solution, x_t, jump_mat)
+            loss = func.get_loss(cand_func, func.true_solution, x_t, jump_mat, brownian)
             tree_optim.zero_grad()
             loss.backward()
             tree_optim.step()
@@ -638,7 +638,7 @@ def get_reward(bs, actions, learnable_tree, tree_params, tree_optim):
             # bd_error = torch.nn.functional.mse_loss(bc_true, bd_nn)
             # function_error = torch.nn.functional.mse_loss(func.LHS_pde(lhs_func, x),
             #                                              func.RHS_pde(x))
-            loss = func.get_loss(cand_func, func.true_solution, x_t, jump_mat)
+            loss = func.get_loss(cand_func, func.true_solution, x_t, jump_mat, brownian)
             print('loss before: ', loss.item())
             error_hist.append(loss.item())
             loss.backward()
@@ -653,10 +653,10 @@ def get_reward(bs, actions, learnable_tree, tree_params, tree_optim):
         # bd_error = torch.nn.functional.mse_loss(bc_true, bd_nn)
         # regression_error = function_error + 100*bd_error
         # print('loss after: ', regression_error.item())
-        x_t, jump_mat = func.get_paths(num_paths, dims=args.dim-1)
+        x_t, jump_mat, brownian = func.get_paths(num_paths, dims=args.dim-1)
         x_t.requires_grad = True
         jump_mat.requires_grad = True
-        loss = func.get_loss(cand_func, func.true_solution, x_t, jump_mat)
+        loss = func.get_loss(cand_func, func.true_solution, x_t, jump_mat, brownian)
         print(f'loss after, {loss}')
         error_hist.append(loss.item())
 
@@ -686,7 +686,7 @@ def best_error(best_action, learnable_tree):
     # x1 = (torch.rand(args.domainbs, args.dim - 1).cuda()) * (args.right - args.left) + args.left
     # x = torch.cat((t, x1), 1)
     # x.requires_grad = True
-    x_t, jump_mat = func.get_paths(num_paths, dims=args.dim-1)
+    x_t, jump_mat, brownian = func.get_paths(num_paths, dims=args.dim-1)
     x_t.requires_grad = True
     jump_mat.requires_grad = True
     bs_action = best_action
@@ -698,7 +698,7 @@ def best_error(best_action, learnable_tree):
     # bd_nn = learnable_tree(bd_pts, bs_action)
     # bd_error = torch.nn.functional.mse_loss(bc_true, bd_nn)
     # function_error = torch.nn.functional.mse_loss(func.LHS_pde(lhs_func, x), func.RHS_pde(x))
-    regression_error = func.get_loss(lhs_func, func.true_solution, x_t, jump_mat)
+    regression_error = func.get_loss(lhs_func, func.true_solution, x_t, jump_mat, brownian)
 
     print(f'error: {regression_error}')
 
