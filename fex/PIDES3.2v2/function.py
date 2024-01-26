@@ -58,6 +58,7 @@ def get_loss(func, true, x_t, jump_mat):
     mu = .4
     sigma = .25
     lam = .3
+    theta = .3
     steps = 50
     domain = [0, 1]
 
@@ -81,7 +82,10 @@ def get_loss(func, true, x_t, jump_mat):
     integral = torch.trapezoid(u_expz * phi.unsqueeze(1).repeat(x_t.shape[0], 1, x_t.shape[1]),
                                 dx=(domain[1] - domain[0]) / num_pts, dim=1)
     n2 = lam * (integral - u_tx)
-    loss1 = torch.mean((u_exp_jumps[..., :-1] - dt * n2[..., :-1] - u_tx[..., 1:]) ** 2)
+
+    #loss1 = torch.mean((u_exp_jumps[..., :-1] - dt * n2[..., :-1] - u_tx[..., 1:]) ** 2)
+    print(u_tx.shape)
+    loss1 = torch.mean(u_tx ** 2)
 
     # Step 2:  loss2
     final_xt = torch.cat((t[:, -1].unsqueeze(1), x_t[:, -1].unsqueeze(1)), dim=1).cuda()

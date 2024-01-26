@@ -108,7 +108,8 @@ def get_loss(func, true, x_t, jump_mat):
     return loss
 
 
-def true_solution(tx):  # for the most simple case, u(t,x) = x
+def true_solution(tx):  # here the true solution is 1/d ||x||^2 i.e. the mean of the 2-norm squared
+    # of the space dimensions
     return torch.mean(tx[...,1:]**2, dim=-1)
 
 
