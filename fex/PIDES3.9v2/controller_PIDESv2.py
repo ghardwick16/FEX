@@ -865,8 +865,9 @@ def train_controller(Controller, Controller_optim, trainable_tree, tree_params, 
         for i in range(1000):
             print(i)
             # x = (torch.rand(100000, args.dim).cuda()) * (args.right - args.left) + args.left
-            t = torch.rand(10000, 1).cuda()
-            x1 = (torch.rand(10000, args.dim - 1).cuda()) * (args.right - args.left) + args.left
+            pts_per_dim = int(20000 / (args.dim - 1))
+            t = torch.rand(pts_per_dim*(args.dim-1), 1).cuda()
+            x1 = (torch.rand(pts_per_dim, args.dim - 1).cuda()) * (args.right - args.left) + args.left
             x = torch.cat((t, x1), 1)
             sq_de = torch.mean((func.true_solution(x)) ** 2)
             sq_nu = torch.mean((func.true_solution(x) - trainable_tree(x, candidate_.action)) ** 2)
