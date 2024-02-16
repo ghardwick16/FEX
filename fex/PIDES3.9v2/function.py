@@ -10,7 +10,7 @@ def get_paths(num_samples, dims):
     sigma = .25
     lam = .3
     theta = .3
-    steps = 50
+    steps = 100
     domain = [0, 1]
 
     # step 1: get jumps (i.e. jump times and jump sizes)
@@ -66,7 +66,7 @@ def get_loss(func, true, x_t, jump_mat, brownian):
     mu = .4
     sigma = .25
     lam = .3
-    steps = 50
+    steps = 100
     domain = [0, 1]
     theta = .3
 
