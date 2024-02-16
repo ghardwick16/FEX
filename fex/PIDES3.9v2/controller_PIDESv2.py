@@ -43,7 +43,7 @@ binary_functions_str = func.binary_functions_str
 left = args.left
 right = args.right
 dim = args.dim
-num_paths = 100
+num_paths = 200
 
 
 def get_boundary(num_pts, dim):
@@ -832,7 +832,7 @@ def train_controller(Controller, Controller_optim, trainable_tree, tree_params, 
                 params.append(param)
 
         reset_params(params)
-        tree_optim = torch.optim.Adam(params, lr=1e-2)
+        tree_optim = torch.optim.Adam(params, lr=1e-3)
 
         for current_iter in range(finetune):
             error = best_error(candidate_.action, trainable_tree)
