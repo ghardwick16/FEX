@@ -868,7 +868,7 @@ def train_controller(Controller, Controller_optim, trainable_tree, tree_params, 
             pts_per_dim = int(20000 / (args.dim - 1))
             t = torch.rand(pts_per_dim*(args.dim-1), 1).cuda()
             x1 = (torch.rand(pts_per_dim, args.dim - 1).cuda()) * (args.right - args.left) + args.left
-            x = torch.cat((t, x1), 1)
+            x = torch.cat((t.unsqueeze(1), x1), 1)
             sq_de = torch.mean((func.true_solution(x)) ** 2)
             sq_nu = torch.mean((func.true_solution(x) - trainable_tree(x, candidate_.action)) ** 2)
             numerators.append(sq_nu.item())
