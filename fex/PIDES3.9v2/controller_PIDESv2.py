@@ -43,7 +43,7 @@ binary_functions_str = func.binary_functions_str
 left = args.left
 right = args.right
 dim = args.dim
-num_paths = 2000
+num_paths = 500
 
 
 def get_boundary(num_pts, dim):
