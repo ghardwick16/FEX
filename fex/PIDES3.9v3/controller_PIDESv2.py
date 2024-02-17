@@ -611,23 +611,23 @@ def get_reward(bs, actions, learnable_tree, tree_params, tree_optim):
         x_t, jump_mat, brownian = func.get_paths(num_paths, dims=args.dim - 1)
         x_t.requires_grad = True
         jump_mat.requires_grad = True
-        for i in range(20):
+        for i in range(5):
             #x_t, jump_mat, brownian = func.get_paths(num_paths, dims=args.dim - 1)
             #x_t.requires_grad = True
             #jump_mat.requires_grad = True
             # loss = func.get_loss(cand_func, func.true_solution, x_t, jump_mat, brownian)
             # print(f'Loss Measure Before TD: {loss}')
-            #avg_loss = func.td_train(tree_optim, cand_func, func.true_solution, x_t, jump_mat, brownian)
-            #print(f'Avg TD Loss {avg_loss.item()}')
+            avg_loss = func.td_train(tree_optim, cand_func, func.true_solution, x_t, jump_mat, brownian)
+            print(f'Avg TD Loss {avg_loss.item()}')
             # loss = func.get_loss(cand_func, func.true_solution, x_t, jump_mat, brownian)
             # print(f'Loss Measure After TD: {loss}')
-            #if i == 4:
-            #    loss = func.get_loss(cand_func, func.true_solution, x_t, jump_mat, brownian)
-            #    print(f'Loss Measure After TD: {loss}')
-            loss = func.get_loss(cand_func, func.true_solution, x_t, jump_mat, brownian)
-            tree_optim.zero_grad()
-            loss.backward()
-            tree_optim.step()
+            if i == 4:
+                loss = func.get_loss(cand_func, func.true_solution, x_t, jump_mat, brownian)
+                print(f'Loss Measure After TD: {loss}')
+            #loss = func.get_loss(cand_func, func.true_solution, x_t, jump_mat, brownian)
+            #tree_optim.zero_grad()
+            #loss.backward()
+            #tree_optim.step()
 
         tree_optim = torch.optim.LBFGS(tree_params, lr=1, max_iter=20)
         print('---------------------------------- batch idx {} -------------------------------------'.format(bs_idx))
@@ -703,10 +703,11 @@ def best_error(best_action, learnable_tree, tree_optim):
     # bd_nn = learnable_tree(bd_pts, bs_action)
     # bd_error = torch.nn.functional.mse_loss(bc_true, bd_nn)
     # function_error = torch.nn.functional.mse_loss(func.LHS_pde(lhs_func, x), func.RHS_pde(x))
-    avg_error = func.td_train(tree_optim, lhs_func, func.true_solution, x_t, jump_mat, brownian)
-
-    print(f'Avg Loss Along Trajectory: {avg_error}')
-    return avg_error
+    #loss = func.td_train(tree_optim, lhs_func, func.true_solution, x_t, jump_mat, brownian)
+    loss = func.get_loss(lhs_func, func.true_solution, x_t, jump_mat, brownian)
+    #loss.backward()
+    #print(f'Avg Loss Along Trajectory: {loss}')
+    return loss
 
 def train_controller(Controller, Controller_optim, trainable_tree, tree_params, hyperparams):
     ### obtain a new file name ###
@@ -818,7 +819,7 @@ def train_controller(Controller, Controller_optim, trainable_tree, tree_params, 
             action_string += str(v.item()) + '-'
         logger.append([666, 0, 0, action_string, candidate_.error.item(), candidate_.expression])
         # logger.append([666, 0, 0, 0, candidate_.error.item(), candidate_.expression])
-    finetune = 1000
+    finetune = 7500
     global count, leaves_cnt
     for candidate_ in candidates.candidates:
         trainable_tree = learnable_compuatation_tree()
@@ -838,21 +839,20 @@ def train_controller(Controller, Controller_optim, trainable_tree, tree_params, 
         tree_optim = torch.optim.Adam(params, lr=1e-3)
 
         for current_iter in range(finetune):
-            avg_error = best_error(candidate_.action, trainable_tree, tree_optim)
-
+            error = best_error(candidate_.action, trainable_tree, tree_optim)
             count = 0
             leaves_cnt = 0
             formula = inorder_visualize(basic_tree(), candidate_.action, trainable_tree)
             leaves_cnt = 0
             count = 0
             suffix = 'Finetune-- Iter {current_iter} Error {error:.5f} Formula {formula}'.format(
-                current_iter=current_iter, error=avg_error, formula=formula)
+                current_iter=current_iter, error=error, formula=formula)
             if (current_iter + 1) % 100 == 0:
                 logger.append([current_iter, 0, 0, 0, error.item(), formula])
             # if smallest_error <= 1e-10:
             #     logger.append([current_iter, 0, 0, 0, error.item(), formula])
             #     return
-            #cosine_lr(tree_optim, 1e-2, current_iter, finetune)
+            cosine_lr(tree_optim, 1e-2, current_iter, finetune)
             print(suffix)
 
             pts_per_dim = int(20000 / (args.dim - 1))
