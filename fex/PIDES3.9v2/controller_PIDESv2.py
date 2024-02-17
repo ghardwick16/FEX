@@ -662,7 +662,7 @@ def get_reward(bs, actions, learnable_tree, tree_params, tree_optim):
         x1 = (torch.rand(pts_per_dim, args.dim - 1).cuda()) * (args.right - args.left) + args.left
         x = torch.cat((t, x1), 1)
         mse = torch.mean((func.true_solution(x) - trainable_tree(x, bs_action)) ** 2)
-        print(f'MSE After, {mse.item}')
+        print(f'MSE After, {mse.item()}')
         print(f'loss after, {loss}')
         error_hist.append(loss.item())
 
