@@ -617,7 +617,7 @@ def get_reward(bs, actions, learnable_tree, tree_params, tree_optim):
             avg_loss = func.td_train(tree_optim, cand_func, func.true_solution, x_t, jump_mat, brownian)
             print(f'Avg TD Loss {avg_loss.item()}')
             loss = func.get_loss(cand_func, func.true_solution, x_t, jump_mat, brownian)
-            print(f'Loss Measure After TD')
+            print(f'Loss Measure After TD: {loss}')
 
         tree_optim = torch.optim.LBFGS(tree_params, lr=1, max_iter=20)
         print('---------------------------------- batch idx {} -------------------------------------'.format(bs_idx))
