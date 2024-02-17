@@ -54,7 +54,7 @@ def td_train(optimizer, func, true, x_t, jump_mat, brownian):
     right = 1
     steps = 50
     dt = 1/steps
-    t = torch.linspace(0, 1, steps=steps).repeat(x_t.shape[0], 1)
+    t = torch.linspace(0, 1, steps=steps).repeat(x_t.shape[0], 1).cuda()
     tx = torch.cat((t.unsqueeze(2), x_t.unsqueeze(2)), dim=2)
     dims = tx.shape[-1]
     num_samples = tx.shape[0]
