@@ -608,7 +608,6 @@ def get_reward(bs, actions, learnable_tree, tree_params, tree_optim):
         reset_params(tree_params)
         tree_optim = torch.optim.Adam(tree_params, lr=1e-3)
         for i in range(5):
-            print(i)
             x_t, jump_mat, brownian = func.get_paths(num_paths, dims=args.dim - 1)
             x_t.requires_grad = True
             jump_mat.requires_grad = True
