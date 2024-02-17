@@ -607,12 +607,17 @@ def get_reward(bs, actions, learnable_tree, tree_params, tree_optim):
 
         reset_params(tree_params)
         tree_optim = torch.optim.Adam(tree_params, lr=1e-3)
-        for _ in range(5):
+        for i in range(5):
+            print(i)
             x_t, jump_mat, brownian = func.get_paths(num_paths, dims=args.dim - 1)
             x_t.requires_grad = True
             jump_mat.requires_grad = True
+            loss = func.get_loss(cand_func, func.true_solution, x_t, jump_mat, brownian)
+            print(f'Loss Measure Before TD: {loss}')
             avg_loss = func.td_train(tree_optim, cand_func, func.true_solution, x_t, jump_mat, brownian)
-            print(avg_loss.item())
+            print(f'Avg TD Loss {avg_loss.item()}')
+            loss = func.get_loss(cand_func, cand_func, func.true_solution, x_t, jump_mat, brownian)
+            print(f'Loss Measure After TD')
 
         tree_optim = torch.optim.LBFGS(tree_params, lr=1, max_iter=20)
         print('---------------------------------- batch idx {} -------------------------------------'.format(bs_idx))
