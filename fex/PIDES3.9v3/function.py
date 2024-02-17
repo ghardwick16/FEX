@@ -6,12 +6,11 @@ import math
 
 def get_paths(num_samples, dims):
     x_0 = 1
-    mu = .4
-    sigma = .25
+    mu = .1
+    sigma = 1e-4
     lam = .3
     theta = .3
-    steps = 100
-    domain = [0, 1]
+    steps = 50
 
     # step 1: get jumps (i.e. jump times and jump sizes)
     jump_t_dist = torch.distributions.exponential.Exponential(lam)
@@ -50,6 +49,80 @@ def get_paths(num_samples, dims):
     return x_t, jump_mat, brownian
 
 
+def td_train(optimizer, func, true, x_t, jump_mat, brownian):
+    left = 0
+    right = 1
+    steps = 50
+    dt = 1/steps
+    t = torch.linspace(0, 1, steps=steps).repeat(x_t.shape[0], 1)
+    tx = torch.cat((t.unsqueeze(2), x_t.unsqueeze(2)), dim=2)
+    dims = tx.shape[-1]
+    num_samples = tx.shape[0]
+    if type(func) is tuple:
+        learnable_tree = func[0]
+        bs_action = func[1]
+        u = lambda y: learnable_tree(y, bs_action)
+    else:
+        u = lambda y: func(y)
+
+    # constants for loss calculations
+    mu = .1
+    sigma = 1e-4
+    lam = .3
+    theta = .3
+    num_pts = 10
+    losses = torch.empty(steps - 1)
+
+    tx_T = tx[:, -1, :]
+    tx_T.requires_grad = True
+
+    z = torch.linspace(start=left, end=right, steps=10).cuda()
+    phi = 1 / (torch.sqrt(2 * torch.Tensor([math.pi]).cuda() * sigma)) * torch.exp(-.5 / sigma ** 2 * (z - mu) ** 2)
+    phi = phi.unsqueeze(0).unsqueeze(0).repeat(tx.shape[0], tx.shape[1], 1)
+
+    for i in range(steps - 1):
+        tx_t = tx[:, i, :]
+        tx_t_1 = tx[:, i + 1, :]
+        tx_t.requires_grad = True
+        z_large = z.unsqueeze(0).unsqueeze(-1).repeat(tx_t.shape[0], 1, dims)
+        tx_t_shift = tx_t.unsqueeze(1).repeat(1, z.shape[0], 1)
+        tx_t_shift[:, :, 1:] += z_large
+        u_shift = u(tx_t_shift).squeeze()
+        u_tx = u(tx_t).squeeze()
+        u_tx_1 = u(tx_t_1).squeeze()
+        # (t, x_j + G(x,z))
+        tx_z = tx_t + torch.cat((torch.zeros(num_samples, 1).cuda(), jump_mat[:, i, :]), dim=1)
+        # tx_z[..., 1:] += jump_mat
+        u_tx_z = u(tx_z).squeeze()
+        n2 = lam * (torch.trapezoid(u_shift * phi[:, i, :], dx=(right - left) / num_pts, dim=-1) - u_tx)
+        f = lam * mu ** 2 + theta ** 2
+        v = torch.ones(u_tx.shape).cuda()
+        grad_u = torch.autograd.grad(u_tx, tx_t, grad_outputs=v, create_graph=True)[0][:, 1:]
+        loss1 = torch.mean(
+            (-f * dt + sigma * torch.sum(grad_u * brownian[:, i, :], dim=1) + u_tx_z - dt * n2 - u_tx_1) ** 2)
+
+        # Step 2:  loss2
+        u_final = u(tx_T).squeeze()
+        true_final = true(tx_T).squeeze()
+        loss2 = 1 / steps * torch.mean(torch.abs(u_final - true_final))
+
+        # Step 3: loss3
+        v = torch.ones(u_final.shape).cuda()
+        du = torch.autograd.grad(u_final, tx_T, grad_outputs=v, create_graph=True)[0]
+        dg = torch.autograd.grad(true_final, tx_T, grad_outputs=v, create_graph=True)[0]
+        loss3 = 1 / steps * torch.mean(torch.abs(du[:, 1:] - dg[:, 1:]))
+
+        # Step 4: add them up
+        loss = loss1 + loss2 + loss3
+
+        losses[i] = loss
+
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
+    return torch.mean(losses)
+
+
 def get_loss(func, true, x_t, jump_mat, brownian):
     left = 0
     right = 1
@@ -63,8 +136,8 @@ def get_loss(func, true, x_t, jump_mat, brownian):
         u = lambda y: func(y)
 
     # constants for loss calculations
-    mu = .4
-    sigma = .25
+    mu = .1
+    sigma = 1e-4
     lam = .3
     steps = 100
     domain = [0, 1]
@@ -88,14 +161,19 @@ def get_loss(func, true, x_t, jump_mat, brownian):
     u_shift = u(tx_shift).squeeze()
     u_tx = u(tx).squeeze()
     # (t, x_j + G(x,z))
-    tx_z = tx + torch.cat((torch.zeros(num_samples,steps,1).cuda(), jump_mat), dim=2)
-    #tx_z[..., 1:] += jump_mat
+    tx_z = tx + torch.cat((torch.zeros(num_samples, steps, 1).cuda(), jump_mat), dim=2)
+    # tx_z[..., 1:] += jump_mat
     u_tx_z = u(tx_z).squeeze()
     n2 = lam * (torch.trapezoid(u_shift * phi, dx=(right - left) / num_pts, dim=-1) - u_tx)
     f = lam * mu ** 2 + theta ** 2
     v = torch.ones(u_tx.shape).cuda()
-    grad_u = torch.autograd.grad(u_tx, tx, grad_outputs=v, create_graph=True)[0][:,:,1:]
-    loss1 = torch.mean((-f * dt + sigma*torch.sum(grad_u[:,:-1,:] * brownian[:,:-1,:], dim=2) + u_tx_z[..., :-1] - dt * n2[..., :-1] - u_tx[..., 1:]) ** 2)
+    grad_u = torch.autograd.grad(u_tx, tx, grad_outputs=v, create_graph=True)[0][:, :, 1:]
+    loss1 = torch.mean((-f * dt + sigma * torch.sum(grad_u[:, :-1, :] * brownian[:, :-1, :], dim=2) + u_tx_z[...,
+                                                                                                      :-1] - dt * n2[
+                                                                                                                  ...,
+                                                                                                                  :-1] - u_tx[
+                                                                                                                         ...,
+                                                                                                                         1:]) ** 2)
 
     # Step 2:  loss2
     final_xt = torch.cat((t[:, -1, :].unsqueeze(1), x_t[:, -1, :].unsqueeze(1)), dim=2).cuda()
@@ -107,7 +185,7 @@ def get_loss(func, true, x_t, jump_mat, brownian):
     v = torch.ones(u_final.shape).cuda()
     du = torch.autograd.grad(u_final, final_xt, grad_outputs=v, create_graph=True)[0]
     dg = torch.autograd.grad(true_final, final_xt, grad_outputs=v, create_graph=True)[0]
-    loss3 = torch.mean(torch.abs(du[:,:,1:] - dg[:,:,1:]))
+    loss3 = torch.mean(torch.abs(du[:, :, 1:] - dg[:, :, 1:]))
 
     # Step 4: add them up
     loss = loss1 + loss2 + loss3
@@ -117,7 +195,7 @@ def get_loss(func, true, x_t, jump_mat, brownian):
 
 def true_solution(tx):  # here the true solution is 1/d ||x||^2 i.e. the mean of the 2-norm squared
     # of the space dimensions
-    return torch.mean(tx[...,1:]**2, dim=-1)
+    return torch.mean(tx[..., 1:] ** 2, dim=-1)
 
 
 unary_functions = [lambda x: 0 * x ** 2,
