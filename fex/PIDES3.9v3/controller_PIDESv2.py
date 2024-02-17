@@ -604,9 +604,11 @@ def get_reward(bs, actions, learnable_tree, tree_params, tree_optim):
         bs_action = [v[bs_idx] for v in actions]
         cand_func = (learnable_tree, bs_action)
         # regression_error = torch.nn.functional.mse_loss(learnable_tree(x, bs_action), func.true_solution(x))
-        print(bs_action)
         reset_params(tree_params)
         tree_optim = torch.optim.Adam(tree_params, lr=1e-3)
+        error_hist = []
+        print('---------------------------------- batch idx {} -------------------------------------'.format(bs_idx))
+
         for i in range(5):
             x_t, jump_mat, brownian = func.get_paths(num_paths, dims=args.dim - 1)
             x_t.requires_grad = True
@@ -624,9 +626,6 @@ def get_reward(bs, actions, learnable_tree, tree_params, tree_optim):
             #tree_optim.step()
 
         tree_optim = torch.optim.LBFGS(tree_params, lr=1, max_iter=20)
-        print('---------------------------------- batch idx {} -------------------------------------'.format(bs_idx))
-
-        error_hist = []
 
         def closure():
             tree_optim.zero_grad()
