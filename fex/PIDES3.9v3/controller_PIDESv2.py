@@ -607,23 +607,17 @@ def get_reward(bs, actions, learnable_tree, tree_params, tree_optim):
         print(bs_action)
         reset_params(tree_params)
         tree_optim = torch.optim.Adam(tree_params, lr=1e-3)
-
-        x_t, jump_mat, brownian = func.get_paths(num_paths, dims=args.dim - 1)
-        x_t.requires_grad = True
-        jump_mat.requires_grad = True
         for i in range(5):
-            #x_t, jump_mat, brownian = func.get_paths(num_paths, dims=args.dim - 1)
-            #x_t.requires_grad = True
-            #jump_mat.requires_grad = True
+            x_t, jump_mat, brownian = func.get_paths(num_paths, dims=args.dim - 1)
+            x_t.requires_grad = True
+            jump_mat.requires_grad = True
             # loss = func.get_loss(cand_func, func.true_solution, x_t, jump_mat, brownian)
             # print(f'Loss Measure Before TD: {loss}')
             avg_loss = func.td_train(tree_optim, cand_func, func.true_solution, x_t, jump_mat, brownian)
             print(f'Avg TD Loss {avg_loss.item()}')
+            error_hist.append(avg_loss.item())
             # loss = func.get_loss(cand_func, func.true_solution, x_t, jump_mat, brownian)
             # print(f'Loss Measure After TD: {loss}')
-            if i == 4:
-                loss = func.get_loss(cand_func, func.true_solution, x_t, jump_mat, brownian)
-                print(f'Loss Measure After TD: {loss}')
             #loss = func.get_loss(cand_func, func.true_solution, x_t, jump_mat, brownian)
             #tree_optim.zero_grad()
             #loss.backward()
@@ -649,7 +643,7 @@ def get_reward(bs, actions, learnable_tree, tree_params, tree_optim):
             loss.backward()
             return loss
 
-        tree_optim.step(closure)
+        #tree_optim.step(closure)
 
         # function_error = torch.nn.functional.mse_loss(func.LHS_pde(lhs_func, x), func.RHS_pde(x))
         # bd_pts = get_boundary(args.bdbs, dim)
@@ -658,12 +652,12 @@ def get_reward(bs, actions, learnable_tree, tree_params, tree_optim):
         # bd_error = torch.nn.functional.mse_loss(bc_true, bd_nn)
         # regression_error = function_error + 100*bd_error
         # print('loss after: ', regression_error.item())
-        x_t, jump_mat, brownian = func.get_paths(num_paths, dims=args.dim - 1)
-        x_t.requires_grad = True
-        jump_mat.requires_grad = True
-        loss = func.get_loss(cand_func, func.true_solution, x_t, jump_mat, brownian)
-        print(f'loss after, {loss}')
-        error_hist.append(loss.item())
+        #x_t, jump_mat, brownian = func.get_paths(num_paths, dims=args.dim - 1)
+        #x_t.requires_grad = True
+        #jump_mat.requires_grad = True
+        #loss = func.get_loss(cand_func, func.true_solution, x_t, jump_mat, brownian)
+        #print(f'loss after, {loss}')
+        #error_hist.append(loss.item())
 
         print(error_hist, ' min: ', min(error_hist))
         regression_errors.append(min(error_hist))
