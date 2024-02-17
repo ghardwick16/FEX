@@ -6,8 +6,8 @@ import math
 
 def get_paths(num_samples, dims):
     x_0 = 1
-    mu = .4
-    sigma = .25
+    mu = .1
+    sigma = 1e-4
     lam = .3
     theta = .3
     steps = 100
@@ -63,8 +63,8 @@ def get_loss(func, true, x_t, jump_mat, brownian):
         u = lambda y: func(y)
 
     # constants for loss calculations
-    mu = .4
-    sigma = .25
+    mu = .1
+    sigma = 1e-4
     lam = .3
     steps = 100
     domain = [0, 1]
