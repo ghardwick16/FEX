@@ -56,7 +56,7 @@ def td_train(optimizer, func, true, x_t, jump_mat, brownian):
     dt = 1/steps
     t = torch.linspace(0, 1, steps=steps).repeat(x_t.shape[0], 1).cuda()
     tx = torch.cat((t.unsqueeze(2), x_t), dim=2)
-    dims = tx.shape[-1]
+    dims = x_t.shape[-1]
     num_samples = tx.shape[0]
     if type(func) is tuple:
         learnable_tree = func[0]
