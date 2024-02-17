@@ -5,7 +5,7 @@ import random
 gpus = [1,7,8,9,2,3,4,5,6]*5
 idx = 0
 
-for dim in [6, 11, 21, 51, 101]:
+for dim in [3]:
     gpu = gpus[idx]
     idx += 1
     os.system('python controller_PIDESv2.py --epoch 200 --bs 10 --greedy 0.1 --gpu ' + str(
