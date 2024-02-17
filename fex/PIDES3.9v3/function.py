@@ -139,7 +139,7 @@ def get_loss(func, true, x_t, jump_mat, brownian):
     mu = .1
     sigma = 1e-4
     lam = .3
-    steps = 100
+    steps = 50
     domain = [0, 1]
     theta = .3
 

@@ -601,9 +601,6 @@ def get_reward(bs, actions, learnable_tree, tree_params, tree_optim):
     global count, leaves_cnt
 
     for bs_idx in range(batch_size):
-        x_t, jump_mat, brownian = func.get_paths(num_paths, dims=args.dim-1)
-        x_t.requires_grad = True
-        jump_mat.requires_grad = True
         bs_action = [v[bs_idx] for v in actions]
         cand_func = (learnable_tree, bs_action)
         # regression_error = torch.nn.functional.mse_loss(learnable_tree(x, bs_action), func.true_solution(x))
@@ -615,7 +612,7 @@ def get_reward(bs, actions, learnable_tree, tree_params, tree_optim):
             x_t.requires_grad = True
             jump_mat.requires_grad = True
             avg_loss = func.td_train(tree_optim, cand_func, func.true_solution, x_t, jump_mat, brownian)
-            print(avg_loss)
+            print(avg_loss[0])
 
         tree_optim = torch.optim.LBFGS(tree_params, lr=1, max_iter=20)
         print('---------------------------------- batch idx {} -------------------------------------'.format(bs_idx))
