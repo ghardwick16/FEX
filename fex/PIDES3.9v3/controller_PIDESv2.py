@@ -17,13 +17,13 @@ parser = argparse.ArgumentParser(description='NAS')
 
 parser.add_argument('--left', default=0, type=float)
 parser.add_argument('--right', default=1, type=float)
-parser.add_argument('--epoch', default=200, type=int)
+parser.add_argument('--epoch', default=2000, type=int)
 parser.add_argument('--bs', default=1, type=int)
 parser.add_argument('--greedy', default=0, type=float)
 parser.add_argument('--random_step', default=0, type=float)
 parser.add_argument('--ckpt', default='', type=str)
 parser.add_argument('--gpu', default=0, type=int)
-parser.add_argument('--dim', default=2, type=int)
+parser.add_argument('--dim', default=5, type=int)
 parser.add_argument('--tree', default='depth2', type=str)
 parser.add_argument('--lr', default=1e-2, type=float)
 parser.add_argument('--percentile', default=0.5, type=float)
@@ -43,7 +43,7 @@ binary_functions_str = func.binary_functions_str
 left = args.left
 right = args.right
 dim = args.dim
-num_paths = 100
+num_paths = 2000
 
 
 def get_boundary(num_pts, dim):
@@ -568,7 +568,7 @@ class Controller(torch.nn.Module):
             else:
                 action = torch.randint(0, structure_choice[idx], size=(batch_size, 1)).cuda()
             # print('old', action)
-            if args.greedy is not 0:
+            if args.greedy != 0:
                 for k in range(args.bs):
                     if np.random.rand(1) < args.greedy:
                         choice = random.choices(range(structure_choice[idx]), k=1)
@@ -601,7 +601,7 @@ def get_reward(bs, actions, learnable_tree, tree_params, tree_optim):
     global count, leaves_cnt
 
     for bs_idx in range(batch_size):
-        x_t, jump_mat = func.get_paths(num_paths)
+        x_t, jump_mat, brownian = func.get_paths(num_paths, dims=args.dim-1)
         x_t.requires_grad = True
         jump_mat.requires_grad = True
         bs_action = [v[bs_idx] for v in actions]
@@ -609,7 +609,7 @@ def get_reward(bs, actions, learnable_tree, tree_params, tree_optim):
         # regression_error = torch.nn.functional.mse_loss(learnable_tree(x, bs_action), func.true_solution(x))
 
         reset_params(tree_params)
-        tree_optim = torch.optim.Adam(tree_params, lr=0.001)
+        tree_optim = torch.optim.Adam(tree_params, lr=1e-2)
         for _ in range(20):
             # bd_pts = get_boundary(args.bdbs, dim)
             # bc_true = func.true_solution(bd_pts)
@@ -619,7 +619,7 @@ def get_reward(bs, actions, learnable_tree, tree_params, tree_optim):
             # changing LHS_pde function to simply take the learnable tree directly for ease of computation of the
             # integral
             # function_error = torch.nn.functional.mse_loss(func.LHS_pde(lhs_func, x), func.RHS_pde(x))
-            loss = func.get_loss(cand_func, func.true_solution, x_t, jump_mat)
+            loss = func.get_loss(cand_func, func.true_solution, x_t, jump_mat, brownian)
             tree_optim.zero_grad()
             loss.backward()
             tree_optim.step()
@@ -638,7 +638,7 @@ def get_reward(bs, actions, learnable_tree, tree_params, tree_optim):
             # bd_error = torch.nn.functional.mse_loss(bc_true, bd_nn)
             # function_error = torch.nn.functional.mse_loss(func.LHS_pde(lhs_func, x),
             #                                              func.RHS_pde(x))
-            loss = func.get_loss(cand_func, func.true_solution, x_t, jump_mat)
+            loss = func.get_loss(cand_func, func.true_solution, x_t, jump_mat, brownian)
             print('loss before: ', loss.item())
             error_hist.append(loss.item())
             loss.backward()
@@ -653,10 +653,10 @@ def get_reward(bs, actions, learnable_tree, tree_params, tree_optim):
         # bd_error = torch.nn.functional.mse_loss(bc_true, bd_nn)
         # regression_error = function_error + 100*bd_error
         # print('loss after: ', regression_error.item())
-        x_t, jump_mat = func.get_paths(num_paths)
+        x_t, jump_mat, brownian = func.get_paths(num_paths, dims=args.dim-1)
         x_t.requires_grad = True
         jump_mat.requires_grad = True
-        loss = func.get_loss(cand_func, func.true_solution, x_t, jump_mat)
+        loss = func.get_loss(cand_func, func.true_solution, x_t, jump_mat, brownian)
         print(f'loss after, {loss}')
         error_hist.append(loss.item())
 
@@ -686,7 +686,7 @@ def best_error(best_action, learnable_tree):
     # x1 = (torch.rand(args.domainbs, args.dim - 1).cuda()) * (args.right - args.left) + args.left
     # x = torch.cat((t, x1), 1)
     # x.requires_grad = True
-    x_t, jump_mat = func.get_paths(num_paths)
+    x_t, jump_mat, brownian = func.get_paths(num_paths, dims=args.dim-1)
     x_t.requires_grad = True
     jump_mat.requires_grad = True
     bs_action = best_action
@@ -698,7 +698,7 @@ def best_error(best_action, learnable_tree):
     # bd_nn = learnable_tree(bd_pts, bs_action)
     # bd_error = torch.nn.functional.mse_loss(bc_true, bd_nn)
     # function_error = torch.nn.functional.mse_loss(func.LHS_pde(lhs_func, x), func.RHS_pde(x))
-    regression_error = func.get_loss(lhs_func, func.true_solution, x_t, jump_mat)
+    regression_error = func.get_loss(lhs_func, func.true_solution, x_t, jump_mat, brownian)
 
     print(f'error: {regression_error}')
 
@@ -832,7 +832,7 @@ def train_controller(Controller, Controller_optim, trainable_tree, tree_params, 
                 params.append(param)
 
         reset_params(params)
-        tree_optim = torch.optim.Adam(params, lr=1e-2)
+        tree_optim = torch.optim.Adam(params, lr=1e-3)
 
         for current_iter in range(finetune):
             error = best_error(candidate_.action, trainable_tree)
@@ -865,8 +865,9 @@ def train_controller(Controller, Controller_optim, trainable_tree, tree_params, 
         for i in range(1000):
             print(i)
             # x = (torch.rand(100000, args.dim).cuda()) * (args.right - args.left) + args.left
-            t = torch.rand(100000, 1).cuda()
-            x1 = (torch.rand(100000, args.dim - 1).cuda()) * (args.right - args.left) + args.left
+            pts_per_dim = int(20000 / (args.dim - 1))
+            t = torch.rand(pts_per_dim, 1).cuda()
+            x1 = (torch.rand(pts_per_dim, args.dim - 1).cuda()) * (args.right - args.left) + args.left
             x = torch.cat((t, x1), 1)
             sq_de = torch.mean((func.true_solution(x)) ** 2)
             sq_nu = torch.mean((func.true_solution(x) - trainable_tree(x, candidate_.action)) ** 2)
@@ -888,7 +889,6 @@ def cosine_lr(opt, base_lr, e, epochs):
 if __name__ == '__main__':
     controller = Controller().cuda()
     hyperparams = {}
-
     hyperparams['controller_max_step'] = args.epoch
     hyperparams['discount'] = 1.0
     hyperparams['ema_baseline_decay'] = 0.95
