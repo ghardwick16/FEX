@@ -74,7 +74,7 @@ def td_train(optimizer, func, true, x_t, jump_mat, brownian):
     losses = torch.empty(steps - 1)
 
     tx_T = tx[:, -1, :]
-    tx_T.requires_grad = True
+    #tx_T.requires_grad = True
 
     z = torch.linspace(start=left, end=right, steps=10).cuda()
     phi = 1 / (torch.sqrt(2 * torch.Tensor([math.pi]).cuda() * sigma)) * torch.exp(-.5 / sigma ** 2 * (z - mu) ** 2)
@@ -83,7 +83,7 @@ def td_train(optimizer, func, true, x_t, jump_mat, brownian):
     for i in range(steps - 1):
         tx_t = tx[:, i, :]
         tx_t_1 = tx[:, i + 1, :]
-        tx_t.requires_grad = True
+        #tx_t.requires_grad = True
         z_large = z.unsqueeze(0).unsqueeze(-1).repeat(tx_t.shape[0], 1, dims)
         tx_t_shift = tx_t.unsqueeze(1).repeat(1, z.shape[0], 1)
         tx_t_shift[:, :, 1:] += z_large
