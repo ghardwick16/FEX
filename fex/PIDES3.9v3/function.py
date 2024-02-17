@@ -168,12 +168,7 @@ def get_loss(func, true, x_t, jump_mat, brownian):
     f = lam * mu ** 2 + theta ** 2
     v = torch.ones(u_tx.shape).cuda()
     grad_u = torch.autograd.grad(u_tx, tx, grad_outputs=v, create_graph=True)[0][:, :, 1:]
-    loss1 = torch.mean((-f * dt + sigma * torch.sum(grad_u[:, :-1, :] * brownian[:, :-1, :], dim=2) + u_tx_z[...,
-                                                                                                      :-1] - dt * n2[
-                                                                                                                  ...,
-                                                                                                                  :-1] - u_tx[
-                                                                                                                         ...,
-                                                                                                                         1:]) ** 2)
+    loss1 = torch.mean((-f * dt + sigma * torch.sum(grad_u[:, :-1, :] * brownian[:, :-1, :], dim=2) + u_tx_z[...,:-1] - dt * n2[...,:-1] - u_tx[...,1:]) ** 2)
 
     # Step 2:  loss2
     final_xt = torch.cat((t[:, -1, :].unsqueeze(1), x_t[:, -1, :].unsqueeze(1)), dim=2).cuda()
