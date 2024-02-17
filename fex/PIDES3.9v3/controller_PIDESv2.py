@@ -612,7 +612,7 @@ def get_reward(bs, actions, learnable_tree, tree_params, tree_optim):
             x_t.requires_grad = True
             jump_mat.requires_grad = True
             avg_loss = func.td_train(tree_optim, cand_func, func.true_solution, x_t, jump_mat, brownian)
-            print(avg_loss[0])
+            print(avg_loss.item())
 
         tree_optim = torch.optim.LBFGS(tree_params, lr=1, max_iter=20)
         print('---------------------------------- batch idx {} -------------------------------------'.format(bs_idx))
