@@ -86,8 +86,6 @@ def td_train(optimizer, func, true, x_t, jump_mat, brownian):
         #tx_t.requires_grad = True
         z_large = z.unsqueeze(0).unsqueeze(-1).repeat(tx_t.shape[0], 1, dims)
         tx_t_shift = tx_t.unsqueeze(1).repeat(1, z.shape[0], 1)
-        print(tx_t_shift.shape)
-        print(z_large.shape)
         tx_t_shift[:, :, 1:] += z_large
         u_shift = u(tx_t_shift).squeeze()
         u_tx = u(tx_t).squeeze()
