@@ -110,7 +110,8 @@ def get_loss(func, true, x_t, jump_mat, brownian):
     loss3 = torch.mean(torch.abs(du[:,:,1:] - dg[:,:,1:]))
 
     # Step 4: add them up
-    loss = loss1 + loss2 + loss3
+    alpha = .3
+    loss = (1-alpha)*loss1 + alpha*(loss2 + loss3)
 
     return loss
 
