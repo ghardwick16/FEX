@@ -611,12 +611,15 @@ def get_reward(bs, actions, learnable_tree, tree_params, tree_optim):
             x_t, jump_mat, brownian = func.get_paths(num_paths, dims=args.dim - 1)
             x_t.requires_grad = True
             jump_mat.requires_grad = True
-            #loss = func.get_loss(cand_func, func.true_solution, x_t, jump_mat, brownian)
-            #print(f'Loss Measure Before TD: {loss}')
+            # loss = func.get_loss(cand_func, func.true_solution, x_t, jump_mat, brownian)
+            # print(f'Loss Measure Before TD: {loss}')
             avg_loss = func.td_train(tree_optim, cand_func, func.true_solution, x_t, jump_mat, brownian)
             print(f'Avg TD Loss {avg_loss.item()}')
-            #loss = func.get_loss(cand_func, func.true_solution, x_t, jump_mat, brownian)
-            #print(f'Loss Measure After TD: {loss}')
+            # loss = func.get_loss(cand_func, func.true_solution, x_t, jump_mat, brownian)
+            # print(f'Loss Measure After TD: {loss}')
+            if i == 4:
+                loss = func.get_loss(cand_func, func.true_solution, x_t, jump_mat, brownian)
+                print(f'Loss Measure After TD: {loss}')
 
         tree_optim = torch.optim.LBFGS(tree_params, lr=1, max_iter=20)
         print('---------------------------------- batch idx {} -------------------------------------'.format(bs_idx))
@@ -647,7 +650,7 @@ def get_reward(bs, actions, learnable_tree, tree_params, tree_optim):
         # bd_error = torch.nn.functional.mse_loss(bc_true, bd_nn)
         # regression_error = function_error + 100*bd_error
         # print('loss after: ', regression_error.item())
-        x_t, jump_mat, brownian = func.get_paths(num_paths, dims=args.dim-1)
+        x_t, jump_mat, brownian = func.get_paths(num_paths, dims=args.dim - 1)
         x_t.requires_grad = True
         jump_mat.requires_grad = True
         loss = func.get_loss(cand_func, func.true_solution, x_t, jump_mat, brownian)
@@ -680,7 +683,7 @@ def best_error(best_action, learnable_tree, tree_optim):
     # x1 = (torch.rand(args.domainbs, args.dim - 1).cuda()) * (args.right - args.left) + args.left
     # x = torch.cat((t, x1), 1)
     # x.requires_grad = True
-    x_t, jump_mat, brownian = func.get_paths(num_paths, dims=args.dim-1)
+    x_t, jump_mat, brownian = func.get_paths(num_paths, dims=args.dim - 1)
     x_t.requires_grad = True
     jump_mat.requires_grad = True
     bs_action = best_action
