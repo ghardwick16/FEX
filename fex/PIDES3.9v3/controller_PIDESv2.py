@@ -606,7 +606,7 @@ def get_reward(bs, actions, learnable_tree, tree_params, tree_optim):
         # regression_error = torch.nn.functional.mse_loss(learnable_tree(x, bs_action), func.true_solution(x))
         print(bs_action)
         reset_params(tree_params)
-        tree_optim = torch.optim.Adam(tree_params, lr=1e-3)
+        tree_optim = torch.optim.Adam(tree_params, lr=1e-2)
         for i in range(5):
             x_t, jump_mat, brownian = func.get_paths(num_paths, dims=args.dim - 1)
             x_t.requires_grad = True
