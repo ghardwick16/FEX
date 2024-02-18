@@ -42,8 +42,11 @@ binary_functions_str = func.binary_functions_str
 
 left = args.left
 right = args.right
+right = args.right
 dim = args.dim
+td_num_paths = 2500
 num_paths = 500
+td_fine_num_paths = 10000
 
 
 def get_boundary(num_pts, dim):
@@ -609,24 +612,25 @@ def get_reward(bs, actions, learnable_tree, tree_params, tree_optim):
         error_hist = []
         print('---------------------------------- batch idx {} -------------------------------------'.format(bs_idx))
 
-        for i in range(5):
-            x_t, jump_mat, brownian = func.get_paths(num_paths, dims=args.dim - 1)
-            x_t.requires_grad = True
-            jump_mat.requires_grad = True
-            # loss = func.get_loss(cand_func, func.true_solution, x_t, jump_mat, brownian)
-            # print(f'Loss Measure Before TD: {loss}')
-            avg_loss = func.td_train(tree_optim, cand_func, func.true_solution, x_t, jump_mat, brownian)
-            print(f'Avg TD Loss {avg_loss.item()}')
-            error_hist.append(avg_loss.item())
-            # loss = func.get_loss(cand_func, func.true_solution, x_t, jump_mat, brownian)
-            # print(f'Loss Measure After TD: {loss}')
-            #loss = func.get_loss(cand_func, func.true_solution, x_t, jump_mat, brownian)
-            #tree_optim.zero_grad()
-            #loss.backward()
-            #tree_optim.step()
+        #for i in range(5):
+        x_t, jump_mat, brownian = func.get_paths(td_num_paths, dims=args.dim - 1)
+        x_t.requires_grad = True
+        jump_mat.requires_grad = True
+        # loss = func.get_loss(cand_func, func.true_solution, x_t, jump_mat, brownian)
+        # print(f'Loss Measure Before TD: {loss}')
+        avg_loss = func.td_train(tree_optim, cand_func, func.true_solution, x_t, jump_mat, brownian)
+        print(f'Avg TD Loss {avg_loss.item()}')
+        # loss = func.get_loss(cand_func, func.true_solution, x_t, jump_mat, brownian)
+        # print(f'Loss Measure After TD: {loss}')
+        #loss = func.get_loss(cand_func, func.true_solution, x_t, jump_mat, brownian)
+        #tree_optim.zero_grad()
+        #loss.backward()
+        #tree_optim.step()
 
         tree_optim = torch.optim.LBFGS(tree_params, lr=1, max_iter=20)
-
+        x_t, jump_mat, brownian = func.get_paths(num_paths, dims=args.dim - 1)
+        x_t.requires_grad = True
+        jump_mat.requires_grad = True
         def closure():
             tree_optim.zero_grad()
 
@@ -642,7 +646,7 @@ def get_reward(bs, actions, learnable_tree, tree_params, tree_optim):
             loss.backward()
             return loss
 
-        #tree_optim.step(closure)
+        tree_optim.step(closure)
 
         # function_error = torch.nn.functional.mse_loss(func.LHS_pde(lhs_func, x), func.RHS_pde(x))
         # bd_pts = get_boundary(args.bdbs, dim)
@@ -684,7 +688,7 @@ def best_error(best_action, learnable_tree, tree_optim):
     # x1 = (torch.rand(args.domainbs, args.dim - 1).cuda()) * (args.right - args.left) + args.left
     # x = torch.cat((t, x1), 1)
     # x.requires_grad = True
-    x_t, jump_mat, brownian = func.get_paths(num_paths, dims=args.dim - 1)
+    x_t, jump_mat, brownian = func.get_paths(td_fine_num_paths, dims=args.dim - 1)
     x_t.requires_grad = True
     jump_mat.requires_grad = True
     bs_action = best_action
@@ -696,8 +700,8 @@ def best_error(best_action, learnable_tree, tree_optim):
     # bd_nn = learnable_tree(bd_pts, bs_action)
     # bd_error = torch.nn.functional.mse_loss(bc_true, bd_nn)
     # function_error = torch.nn.functional.mse_loss(func.LHS_pde(lhs_func, x), func.RHS_pde(x))
-    #loss = func.td_train(tree_optim, lhs_func, func.true_solution, x_t, jump_mat, brownian)
-    loss = func.get_loss(lhs_func, func.true_solution, x_t, jump_mat, brownian)
+    loss = func.td_train(tree_optim, lhs_func, func.true_solution, x_t, jump_mat, brownian)
+    #loss = func.get_loss(lhs_func, func.true_solution, x_t, jump_mat, brownian)
     #loss.backward()
     #print(f'Avg Loss Along Trajectory: {loss}')
     return loss
@@ -812,7 +816,7 @@ def train_controller(Controller, Controller_optim, trainable_tree, tree_params, 
             action_string += str(v.item()) + '-'
         logger.append([666, 0, 0, action_string, candidate_.error.item(), candidate_.expression])
         # logger.append([666, 0, 0, 0, candidate_.error.item(), candidate_.expression])
-    finetune = 7500
+    finetune = 100
     global count, leaves_cnt
     for candidate_ in candidates.candidates:
         trainable_tree = learnable_compuatation_tree()
