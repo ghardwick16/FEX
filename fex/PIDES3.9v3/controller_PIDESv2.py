@@ -601,6 +601,9 @@ def get_reward(bs, actions, learnable_tree, tree_params, tree_optim):
     batch_size = bs
 
     global count, leaves_cnt
+    x_t, jump_mat, brownian = func.get_paths(td_num_paths, dims=args.dim - 1)
+    x_t.requires_grad = True
+    jump_mat.requires_grad = True
 
     for bs_idx in range(batch_size):
         bs_action = [v[bs_idx] for v in actions]
@@ -612,9 +615,6 @@ def get_reward(bs, actions, learnable_tree, tree_params, tree_optim):
         print('---------------------------------- batch idx {} -------------------------------------'.format(bs_idx))
 
         #for i in range(5):
-        x_t, jump_mat, brownian = func.get_paths(td_num_paths, dims=args.dim - 1)
-        x_t.requires_grad = True
-        jump_mat.requires_grad = True
         # loss = func.get_loss(cand_func, func.true_solution, x_t, jump_mat, brownian)
         # print(f'Loss Measure Before TD: {loss}')
         avg_loss = func.td_train(tree_optim, cand_func, func.true_solution, x_t, jump_mat, brownian)
@@ -627,9 +627,9 @@ def get_reward(bs, actions, learnable_tree, tree_params, tree_optim):
         #tree_optim.step()
 
         tree_optim = torch.optim.LBFGS(tree_params, lr=1, max_iter=20)
-        x_t, jump_mat, brownian = func.get_paths(num_paths, dims=args.dim - 1)
-        x_t.requires_grad = True
-        jump_mat.requires_grad = True
+        #x_t, jump_mat, brownian = func.get_paths(num_paths, dims=args.dim - 1)
+        #x_t.requires_grad = True
+        #jump_mat.requires_grad = True
         def closure():
             tree_optim.zero_grad()
 
@@ -639,7 +639,7 @@ def get_reward(bs, actions, learnable_tree, tree_params, tree_optim):
             # bd_error = torch.nn.functional.mse_loss(bc_true, bd_nn)
             # function_error = torch.nn.functional.mse_loss(func.LHS_pde(lhs_func, x),
             #                                              func.RHS_pde(x))
-            loss = func.get_loss(cand_func, func.true_solution, x_t, jump_mat, brownian)
+            loss = func.get_loss(cand_func, func.true_solution, x_t[:num_paths,...], jump_mat[:num_paths,...], brownian[:num_paths,...])
             print('loss before: ', loss.item())
             error_hist.append(loss.item())
             loss.backward()
