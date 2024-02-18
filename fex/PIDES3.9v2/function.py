@@ -10,7 +10,7 @@ def get_paths(num_samples, dims):
     sigma = 1e-4
     lam = .3
     theta = .3
-    steps = 100
+    steps = 50
     domain = [0, 1]
 
     # step 1: get jumps (i.e. jump times and jump sizes)
@@ -66,11 +66,11 @@ def get_loss(func, true, x_t, jump_mat, brownian):
     mu = .1
     sigma = 1e-4
     lam = .3
-    steps = 100
+    steps = 50
     domain = [0, 1]
     theta = .3
 
-    num_pts = 10
+    num_pts = 20
     dt = (domain[1] - domain[0]) / x_t.shape[1]
     # Step 1:  loss1
     # Loss1, TD_error at t_n is given, in (2.20).  Note that we made a simplifying assumption
