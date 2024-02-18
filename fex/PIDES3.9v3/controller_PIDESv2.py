@@ -44,9 +44,8 @@ left = args.left
 right = args.right
 right = args.right
 dim = args.dim
-td_num_paths = 2500
+td_num_paths = 10000
 num_paths = 500
-td_fine_num_paths = 10000
 
 
 def get_boundary(num_pts, dim):
@@ -688,7 +687,7 @@ def best_error(best_action, learnable_tree, tree_optim):
     # x1 = (torch.rand(args.domainbs, args.dim - 1).cuda()) * (args.right - args.left) + args.left
     # x = torch.cat((t, x1), 1)
     # x.requires_grad = True
-    x_t, jump_mat, brownian = func.get_paths(td_fine_num_paths, dims=args.dim - 1)
+    x_t, jump_mat, brownian = func.get_paths(td_num_paths, dims=args.dim - 1)
     x_t.requires_grad = True
     jump_mat.requires_grad = True
     bs_action = best_action
