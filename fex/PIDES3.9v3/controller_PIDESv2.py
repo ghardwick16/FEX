@@ -44,8 +44,8 @@ left = args.left
 right = args.right
 right = args.right
 dim = args.dim
-td_num_paths = 10000
-num_paths = 1000
+num_paths = 10000
+
 
 
 def get_boundary(num_pts, dim):
@@ -592,7 +592,7 @@ class Controller(torch.nn.Module):
                 tools.get_variable(zeros.clone(), True, requires_grad=False))
 
 
-def get_reward(bs, actions, learnable_tree, tree_params, tree_optim):
+def get_reward(bs, actions, learnable_tree, tree_params, tree_optim, path_triple):
     # x = (torch.rand(args.domainbs, dim).cuda())*(args.right-args.left)+args.left
 
     # print(x)
@@ -601,9 +601,7 @@ def get_reward(bs, actions, learnable_tree, tree_params, tree_optim):
     batch_size = bs
 
     global count, leaves_cnt
-    x_t, jump_mat, brownian = func.get_paths(td_num_paths, dims=args.dim - 1)
-    x_t.requires_grad = True
-    jump_mat.requires_grad = True
+    x_t, jump_mat, brownian = path_triple
 
     for bs_idx in range(batch_size):
         bs_action = [v[bs_idx] for v in actions]
@@ -682,14 +680,12 @@ def true(x):
     return -0.5 * (torch.sum(x ** 2, dim=1, keepdim=True))
 
 
-def best_error(best_action, learnable_tree, tree_optim):
+def best_error(best_action, learnable_tree, tree_optim, path_triple):
     # t = torch.rand(args.domainbs, 1).cuda()
     # x1 = (torch.rand(args.domainbs, args.dim - 1).cuda()) * (args.right - args.left) + args.left
     # x = torch.cat((t, x1), 1)
     # x.requires_grad = True
-    x_t, jump_mat, brownian = func.get_paths(td_num_paths, dims=args.dim - 1)
-    x_t.requires_grad = True
-    jump_mat.requires_grad = True
+    x_t, jump_mat, brownian = path_triple
     bs_action = best_action
 
     lhs_func = (learnable_tree, bs_action)
@@ -725,6 +721,11 @@ def train_controller(Controller, Controller_optim, trainable_tree, tree_params, 
 
     candidates = SaveBuffer(10)
 
+    x_t, jump_mat, brownian = func.get_paths(num_paths, dims=args.dim - 1)
+    x_t.requires_grad = True
+    jump_mat.requires_grad = True
+    path_triple = (x_t, jump_mat, brownian)
+
     tree_optim = None
     for step in range(hyperparams['controller_max_step']):
         # sample models
@@ -733,7 +734,7 @@ def train_controller(Controller, Controller_optim, trainable_tree, tree_params, 
         for action in actions:
             binary_code = binary_code + str(action[0].item())
 
-        rewards, formulas = get_reward(bs, actions, trainable_tree, tree_params, tree_optim)
+        rewards, formulas = get_reward(bs, actions, trainable_tree, tree_params, tree_optim, path_triple)
         rewards = torch.cuda.FloatTensor(rewards).view(-1, 1)
         # discount
         if 1 > hyperparams['discount'] > 0:
@@ -835,7 +836,7 @@ def train_controller(Controller, Controller_optim, trainable_tree, tree_params, 
         tree_optim = torch.optim.Adam(params, lr=1e-3)
 
         for current_iter in range(finetune):
-            error = best_error(candidate_.action, trainable_tree, tree_optim)
+            error = best_error(candidate_.action, trainable_tree, tree_optim, path_triple)
             count = 0
             leaves_cnt = 0
             formula = inorder_visualize(basic_tree(), candidate_.action, trainable_tree)
