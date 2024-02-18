@@ -45,7 +45,7 @@ right = args.right
 right = args.right
 dim = args.dim
 td_num_paths = 10000
-num_paths = 500
+num_paths = 1000
 
 
 def get_boundary(num_pts, dim):
