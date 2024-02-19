@@ -724,6 +724,7 @@ def train_controller(Controller, Controller_optim, trainable_tree, tree_params, 
 
     model = Controller
     model.train()
+    print(model.parameters())
 
     baseline = None
 
@@ -895,7 +896,6 @@ def cosine_lr(opt, base_lr, e, epochs):
 
 if __name__ == '__main__':
     controller = Controller().cuda()
-    print(controller.parameters())
     hyperparams = {}
     hyperparams['controller_max_step'] = args.epoch
     hyperparams['discount'] = 1.0
