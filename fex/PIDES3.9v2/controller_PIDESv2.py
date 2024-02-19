@@ -714,7 +714,6 @@ def best_error(best_action, learnable_tree):
 
 def train_controller(Controller, Controller_optim, trainable_tree, tree_params, hyperparams):
     ### obtain a new file name ###
-    print(controller.parameters())
     file_name = os.path.join(hyperparams['checkpoint'], 'log{}.txt')
     file_idx = 0
     while os.path.isfile(file_name.format(file_idx)):
@@ -896,6 +895,7 @@ def cosine_lr(opt, base_lr, e, epochs):
 
 if __name__ == '__main__':
     controller = Controller().cuda()
+    print(controller.parameters())
     hyperparams = {}
     hyperparams['controller_max_step'] = args.epoch
     hyperparams['discount'] = 1.0
