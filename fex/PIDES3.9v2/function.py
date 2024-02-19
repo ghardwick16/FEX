@@ -70,20 +70,27 @@ def get_loss(func, true, x_t, jump_mat, brownian):
     domain = [0, 1]
     theta = .3
 
-    num_pts = 20
-    dt = (domain[1] - domain[0]) / x_t.shape[1]
+    num_pts = 1000
+    z = torch.linspace(start=left, end=right, steps=num_pts).cuda()
     # Step 1:  loss1
     # Loss1, TD_error at t_n is given, in (2.20).  Note that we made a simplifying assumption
     # that only one jump occurs per time step, so the sum is a single value (in practice, if
     # two jumps occur, we simply sum them)
-    z = torch.linspace(start=left, end=right, steps=num_pts).cuda()
-    phi = 1 / (torch.sqrt(2 * torch.Tensor([math.pi]).cuda() * sigma)) * torch.exp(-.5 / sigma ** 2 * (z - mu) ** 2)
-    phi = phi.unsqueeze(0).unsqueeze(0).repeat(x_t.shape[0], x_t.shape[1], 1)
+    ### changing numerical integration scheme ###
+    ###phi = 1 / (torch.sqrt(2 * torch.Tensor([math.pi]).cuda() * sigma)) * torch.exp(-.5 / sigma ** 2 * (z - mu) ** 2)
+    ###phi = phi.unsqueeze(0).unsqueeze(0).repeat(x_t.shape[0], x_t.shape[1], 1)
+
+    z = torch.randint(low=0, high=10, size=(num_pts, dims)).cuda()
+    phi = 1 / (torch.sqrt(2 * torch.Tensor([math.pi]).cuda() * sigma)) * torch.exp(-.5 / sigma ** 2 * torch.sum((z - mu) ** 2, dim=-1))
+    phi = phi.unsqueeze(0).repeat(x_t.shape[0], x_t.shape[1], 1)
+
     t = torch.linspace(start=domain[0], end=domain[1], steps=x_t.shape[1]).repeat(x_t.shape[0], 1).unsqueeze(2).cuda()
     tx = torch.cat((t, x_t), dim=2)
     # dims are (batch_size, time steps, integration points, dims)
-    z_large = z.unsqueeze(-1).unsqueeze(0).unsqueeze(0).repeat(x_t.shape[0], x_t.shape[1], 1, dims)
-    tx_shift = tx.unsqueeze(2).repeat(1, 1, z.shape[0], 1)
+    ###z_large = z.unsqueeze(-1).unsqueeze(0).unsqueeze(0).repeat(x_t.shape[0], x_t.shape[1], 1, dims)
+    ###tx_shift = tx.unsqueeze(2).repeat(1, 1, z.shape[0], 1)
+    z_large = z.unsqueeze(0).unsqueeze(0).repeat(x_t.shape[0], x_t.shape[1], 1, 1).cuda()
+    tx_shift = tx.unsqueeze(2).repeat(1, 1, num_pts, 1)
     tx_shift[:, :, :, 1:] += z_large
     u_shift = u(tx_shift).squeeze()
     u_tx = u(tx).squeeze()
@@ -91,7 +98,8 @@ def get_loss(func, true, x_t, jump_mat, brownian):
     tx_z = tx + torch.cat((torch.zeros(num_samples,steps,1).cuda(), jump_mat), dim=2)
     #tx_z[..., 1:] += jump_mat
     u_tx_z = u(tx_z).squeeze()
-    n2 = lam * (torch.trapezoid(u_shift * phi, dx=(right - left) / num_pts, dim=-1) - u_tx)
+    #n2 = lam * (torch.trapezoid(u_shift * phi, dx=(right - left) / num_pts, dim=-1) - u_tx)
+    n2 = lam * (1/num_pts*torch.sum(u_shift * phi, dim=-1) - u_tx)
     f = lam * mu ** 2 + theta ** 2
     v = torch.ones(u_tx.shape).cuda()
     grad_u = torch.autograd.grad(u_tx, tx, grad_outputs=v, create_graph=True)[0][:,:,1:]
