@@ -71,7 +71,7 @@ def get_loss(func, true, x_t, jump_mat, brownian):
     theta = .3
     dt = 1/steps
 
-    num_pts = 1000
+    num_pts = 10*dims
     ###z = torch.linspace(start=left, end=right, steps=num_pts).cuda()
     # Step 1:  loss1
     # Loss1, TD_error at t_n is given, in (2.20).  Note that we made a simplifying assumption
