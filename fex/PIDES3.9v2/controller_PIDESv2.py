@@ -541,7 +541,6 @@ class Controller(torch.nn.Module):
         # exploration # ??
         if self.mode == 'train':
             logits = (self.tanh_c * F.tanh(logits))
-        print(logits)
 
         return logits
 
@@ -716,6 +715,7 @@ def best_error(best_action, learnable_tree):
 
 def train_controller(Controller, Controller_optim, trainable_tree, tree_params, hyperparams):
     ### obtain a new file name ###
+    print(controller.parameters())
     file_name = os.path.join(hyperparams['checkpoint'], 'log{}.txt')
     file_idx = 0
     while os.path.isfile(file_name.format(file_idx)):
