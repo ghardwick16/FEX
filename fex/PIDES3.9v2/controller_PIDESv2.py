@@ -676,7 +676,6 @@ def get_reward(bs, actions, learnable_tree, tree_params, tree_optim):
         leaves_cnt = 0
         formulas.append(formula)
         print(tree_params)
-        print(formula)
 
     return regression_errors, formulas
 
