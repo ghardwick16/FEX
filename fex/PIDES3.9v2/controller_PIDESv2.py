@@ -541,6 +541,7 @@ class Controller(torch.nn.Module):
         # exploration # ??
         if self.mode == 'train':
             logits = (self.tanh_c * F.tanh(logits))
+        print(logits)
 
         return logits
 
