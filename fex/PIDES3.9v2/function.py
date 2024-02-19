@@ -69,9 +69,10 @@ def get_loss(func, true, x_t, jump_mat, brownian):
     steps = 50
     domain = [0, 1]
     theta = .3
+    dt = 1/steps
 
     num_pts = 1000
-    z = torch.linspace(start=left, end=right, steps=num_pts).cuda()
+    ###z = torch.linspace(start=left, end=right, steps=num_pts).cuda()
     # Step 1:  loss1
     # Loss1, TD_error at t_n is given, in (2.20).  Note that we made a simplifying assumption
     # that only one jump occurs per time step, so the sum is a single value (in practice, if
