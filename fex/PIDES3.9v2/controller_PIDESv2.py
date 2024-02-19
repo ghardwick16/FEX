@@ -724,7 +724,6 @@ def train_controller(Controller, Controller_optim, trainable_tree, tree_params, 
 
     model = Controller
     model.train()
-    print(model.parameters())
 
     baseline = None
 
@@ -793,6 +792,7 @@ def train_controller(Controller, Controller_optim, trainable_tree, tree_params, 
             torch.nn.utils.clip_grad_norm(model.parameters(),
                                           hyperparams['controller_grad_clip'])
         Controller_optim.step()
+        print(model.parameters())
 
         min_error = error.min().item()
         # print('******************** ', min_error)
