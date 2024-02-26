@@ -129,7 +129,6 @@ def true_solution(tx):  # here the true solution is 1/d ||x||^2 i.e. the mean of
     # of the space dimensions
     return torch.mean(tx[...,1:]**2, dim=-1)
 
-
 unary_functions = [lambda x: 0 * x ** 2,
                    lambda x: 1 + 0 * x ** 2,
                    lambda x: x + 0 * x ** 2,

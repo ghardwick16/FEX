@@ -771,6 +771,7 @@ def train_controller(Controller, Controller_optim, trainable_tree, tree_params, 
             decay = hyperparams['ema_baseline_decay']
             baseline = decay * baseline + (1 - decay) * (rewards).mean()
 
+
         argsort = torch.argsort(rewards.squeeze(1), descending=True)
         # print(error, argsort)
         # print(rewards.size(), rewards.squeeze(1), torch.argsort(rewards.squeeze(1)), rewards[argsort])
