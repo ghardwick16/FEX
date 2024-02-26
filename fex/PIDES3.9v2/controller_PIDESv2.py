@@ -628,7 +628,7 @@ def get_reward(bs, actions, learnable_tree, tree_params, tree_optim):
         tree_optim = torch.optim.LBFGS(tree_params, lr=1, max_iter=20)
         print('---------------------------------- batch idx {} -------------------------------------'.format(bs_idx))
 
-
+        error_hist = []
         def closure():
             tree_optim.zero_grad()
 
@@ -664,7 +664,6 @@ def get_reward(bs, actions, learnable_tree, tree_params, tree_optim):
         print(f'MSE After, {mse.item()}')
         print(f'loss after, {loss}')
         error_hist.append(loss.item())
-
         print(error_hist, ' min: ', min(error_hist))
         regression_errors.append(min(error_hist))
 
