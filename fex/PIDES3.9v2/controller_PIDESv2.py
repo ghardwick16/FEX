@@ -12,6 +12,7 @@ import function as func
 import argparse
 import random
 import math
+import matplotlib.pyplot as plt
 
 parser = argparse.ArgumentParser(description='NAS')
 
@@ -627,7 +628,6 @@ def get_reward(bs, actions, learnable_tree, tree_params, tree_optim):
         tree_optim = torch.optim.LBFGS(tree_params, lr=1, max_iter=20)
         print('---------------------------------- batch idx {} -------------------------------------'.format(bs_idx))
 
-        error_hist = []
 
         def closure():
             tree_optim.zero_grad()
@@ -640,7 +640,6 @@ def get_reward(bs, actions, learnable_tree, tree_params, tree_optim):
             #                                              func.RHS_pde(x))
             loss = func.get_loss(cand_func, func.true_solution, x_t, jump_mat, brownian)
             print('loss before: ', loss.item())
-            error_hist.append(loss.item())
             loss.backward()
             return loss
 
@@ -732,6 +731,7 @@ def train_controller(Controller, Controller_optim, trainable_tree, tree_params, 
 
     candidates = SaveBuffer(10)
 
+
     tree_optim = None
     for step in range(hyperparams['controller_max_step']):
         # sample models
@@ -792,7 +792,6 @@ def train_controller(Controller, Controller_optim, trainable_tree, tree_params, 
             torch.nn.utils.clip_grad_norm(model.parameters(),
                                           hyperparams['controller_grad_clip'])
         Controller_optim.step()
-        print(model.parameters())
 
         min_error = error.min().item()
         # print('******************** ', min_error)
@@ -823,8 +822,9 @@ def train_controller(Controller, Controller_optim, trainable_tree, tree_params, 
             action_string += str(v.item()) + '-'
         logger.append([666, 0, 0, action_string, candidate_.error.item(), candidate_.expression])
         # logger.append([666, 0, 0, 0, candidate_.error.item(), candidate_.expression])
-    finetune = 7500
+    finetune = 20000
     global count, leaves_cnt
+    cand_number = 0
     for candidate_ in candidates.candidates:
         trainable_tree = learnable_compuatation_tree()
         trainable_tree = trainable_tree.cuda()
@@ -841,9 +841,10 @@ def train_controller(Controller, Controller_optim, trainable_tree, tree_params, 
 
         reset_params(params)
         tree_optim = torch.optim.Adam(params, lr=1e-3)
-
+        error_hist = []
         for current_iter in range(finetune):
             error = best_error(candidate_.action, trainable_tree)
+            error_hist.append(error)
             tree_optim.zero_grad()
             error.backward()
 
@@ -869,6 +870,11 @@ def train_controller(Controller, Controller_optim, trainable_tree, tree_params, 
 
         numerators = []
         denominators = []
+        equation = str(candidate_.expression)
+        plt.plot(error_hist)
+        plt.title(equation)
+        name = str(cand_number) + 'plot.png'
+        plt.savefig(name, format='png')
 
         for i in range(1000):
             print(i)
@@ -885,6 +891,7 @@ def train_controller(Controller, Controller_optim, trainable_tree, tree_params, 
         relative_l2 = math.sqrt(sum(numerators)) / math.sqrt(sum(denominators))
         print('relative l2 error: ', relative_l2)
         logger.append(['relative_l2', 0, 0, 0, relative_l2, 0])
+        cand_number += 1
 
 
 def cosine_lr(opt, base_lr, e, epochs):
