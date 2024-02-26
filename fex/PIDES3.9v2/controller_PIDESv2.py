@@ -843,7 +843,7 @@ def train_controller(Controller, Controller_optim, trainable_tree, tree_params, 
         error_hist = []
         for current_iter in range(finetune):
             error = best_error(candidate_.action, trainable_tree)
-            error_hist.append(error)
+            error_hist.append(error.item())
             tree_optim.zero_grad()
             error.backward()
 
