@@ -872,8 +872,8 @@ def train_controller(Controller, Controller_optim, trainable_tree, tree_params, 
         equation = str(candidate_.expression)
         plt.plot(error_hist)
         plt.title(equation)
-        #name = str(cand_number) + 'plot.png'
-        #plt.savefig(name, format='png')
+        name = str(cand_number) + 'plot.pdf'
+        plt.savefig(name, format='pdf')
 
         for i in range(1000):
             print(i)
