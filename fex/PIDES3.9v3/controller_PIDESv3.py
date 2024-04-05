@@ -6,12 +6,17 @@ import tools
 import scipy
 from utils import Logger, mkdir_p
 import os
-import torch.nn as nn
 from computational_tree import BinaryTree
 import function as func
 import argparse
 import random
 import math
+import matplotlib.pyplot as plt
+import scipy.cluster.hierarchy as hcluster
+from torch.nn.parameter import Parameter, UninitializedParameter
+from torch import Tensor
+import torch.nn as nn
+import itertools
 
 parser = argparse.ArgumentParser(description='NAS')
 
@@ -28,6 +33,7 @@ parser.add_argument('--tree', default='depth2', type=str)
 parser.add_argument('--lr', default=1e-2, type=float)
 parser.add_argument('--percentile', default=0.5, type=float)
 parser.add_argument('--base', default=100, type=int)
+parser.add_argument('--clustering_thresh', default=None, type=float)
 # parser.add_argument('--domainbs', default=1000, type=int)
 # parser.add_argument('--bdbs', default=1000, type=int)
 args = parser.parse_args()
@@ -42,11 +48,13 @@ binary_functions_str = func.binary_functions_str
 
 left = args.left
 right = args.right
-right = args.right
 dim = args.dim
-num_paths = 10000
-
-
+num_paths = 500
+if args.clustering_thresh:
+    thresh = args.clustering_thresh
+    clustering = True
+else:
+    clustering=False
 
 def get_boundary(num_pts, dim):
     bd_pts = (torch.rand(num_pts, dim).cuda()) * (args.right - args.left) + args.left
@@ -81,6 +89,7 @@ class SaveBuffer(object):
                 break
             elif candidate.action == old_candidate.action:
                 flag = 0
+
 
         if flag == 1:
             if action_idx is not None:
@@ -429,6 +438,35 @@ def get_function_trainable_params(actions, unary_choices):
     return computation_tree
 
 
+class leaf(nn.Module):
+    ## Clustering is a list that gives numbers to each cluster of weights i.e. [0, 0, 1, 1, 1] means that
+    ## x0, x1 have same weight and x2, x3, x4 have same weight
+    def __init__(self, in_features: int, out_features: int, bias: bool = True,
+                 device=None, dtype=None, clustering=None) -> None:
+        factory_kwargs = {'device': device, 'dtype': dtype}
+        super().__init__()
+        self.clustering = clustering
+        self.in_features = in_features
+        out_features = 1  # this is only to be used for leaves in FEX, so out features is always 1
+        self.weight = Parameter(torch.empty((out_features, in_features), **factory_kwargs))
+        if bias:
+            self.bias = Parameter(torch.empty(out_features, **factory_kwargs))
+        else:
+            self.register_parameter('bias', None)
+        self.reset_parameters()
+
+    def reset_parameters(self) -> None:
+        for param in self.parameters():
+            param.data.normal_(0.0, 0.1)
+
+    def forward(self, input: Tensor) -> Tensor:
+        if self.clustering:
+            combined_weight = self.weight[0, self.clustering]
+            return F.linear(input, combined_weight, self.bias)
+        else:
+            return F.linear(input, self.weight, self.bias)
+
+
 class unary_operation(nn.Module):
     def __init__(self, operator, is_leave):
         super(unary_operation, self).__init__()
@@ -481,11 +519,16 @@ def compute_by_tree(tree, linear, x):
     else:
         return tree.key(compute_by_tree(tree.leftChild, linear, x), compute_by_tree(tree.rightChild, linear, x))
 
+## Clustering is a list of lists, the ith list corresponding to the clustering of the ith leaf.  If no clustering is
+## desired for a given leaf, then that leaf's clustering list should just be range(dims) (i.e. [0,1,2,...,d])
 
+## If no clustering is wanted at all, then pass in no argument for clustering and learnable_computation_tree will
+## behave as usual
 class learnable_compuatation_tree(nn.Module):
-    def __init__(self):
+    def __init__(self, clustering=None):
         super(learnable_compuatation_tree, self).__init__()
         self.learnable_operator_set = {}
+        self.clustering = clustering
         for i in range(len(structure)):
             self.learnable_operator_set[i] = []
             is_leave = i in leaves_index
@@ -495,7 +538,10 @@ class learnable_compuatation_tree(nn.Module):
                 self.learnable_operator_set[i].append(binary_operation(binary[j]))
         self.linear = []
         for num, i in enumerate(range(leaves)):
-            linear_module = torch.nn.Linear(dim, 1, bias=True).cuda()  # set only one variable
+            if clustering:
+                linear_module = leaf(dim, 1, bias=True, clustering=self.clustering[i]).cuda()  # set only one variable
+            else:
+                linear_module = leaf(dim, 1, bias=True).cuda()
             linear_module.weight.data.normal_(0, 1 / math.sqrt(dim))
             # linear_module.weight.data[0, num%2] = 1
             linear_module.bias.data.fill_(0)
@@ -592,42 +638,43 @@ class Controller(torch.nn.Module):
                 tools.get_variable(zeros.clone(), True, requires_grad=False))
 
 
-def get_reward(bs, actions, learnable_tree, tree_params, tree_optim, path_triple):
+def get_reward(bs, actions, learnable_tree, tree_params, tree_optim):
     # x = (torch.rand(args.domainbs, dim).cuda())*(args.right-args.left)+args.left
 
     # print(x)
     regression_errors = []
     formulas = []
     batch_size = bs
-
     global count, leaves_cnt
-    x_t, jump_mat, brownian = path_triple
 
     for bs_idx in range(batch_size):
+        x_t, jump_mat, brownian = func.get_paths(num_paths, dims=args.dim-1)
+        x_t.requires_grad = True
+        jump_mat.requires_grad = True
         bs_action = [v[bs_idx] for v in actions]
         cand_func = (learnable_tree, bs_action)
         # regression_error = torch.nn.functional.mse_loss(learnable_tree(x, bs_action), func.true_solution(x))
-        reset_params(tree_params)
-        tree_optim = torch.optim.Adam(tree_params, lr=1e-3)
-        error_hist = []
-        print('---------------------------------- batch idx {} -------------------------------------'.format(bs_idx))
 
-        #for i in range(5):
-        # loss = func.get_loss(cand_func, func.true_solution, x_t, jump_mat, brownian)
-        # print(f'Loss Measure Before TD: {loss}')
-        avg_loss = func.td_train(tree_optim, cand_func, func.true_solution, x_t, jump_mat, brownian)
-        print(f'Avg TD Loss {avg_loss.item()}')
-        # loss = func.get_loss(cand_func, func.true_solution, x_t, jump_mat, brownian)
-        # print(f'Loss Measure After TD: {loss}')
-        #loss = func.get_loss(cand_func, func.true_solution, x_t, jump_mat, brownian)
-        #tree_optim.zero_grad()
-        #loss.backward()
-        #tree_optim.step()
+        reset_params(tree_params)
+        tree_optim = torch.optim.Adam(tree_params, lr=1e-2)
+        for _ in range(20):
+            # bd_pts = get_boundary(args.bdbs, dim)
+            # bc_true = func.true_solution(bd_pts)
+            # bd_nn = learnable_tree(bd_pts, bs_action)
+            # bd_error = torch.nn.functional.mse_loss(bc_true, bd_nn)
+
+            # changing LHS_pde function to simply take the learnable tree directly for ease of computation of the
+            # integral
+            # function_error = torch.nn.functional.mse_loss(func.LHS_pde(lhs_func, x), func.RHS_pde(x))
+            loss = func.get_loss(cand_func, func.true_solution, x_t, jump_mat, brownian)
+            tree_optim.zero_grad()
+            loss.backward()
+            tree_optim.step()
 
         tree_optim = torch.optim.LBFGS(tree_params, lr=1, max_iter=20)
-        #x_t, jump_mat, brownian = func.get_paths(num_paths, dims=args.dim - 1)
-        #x_t.requires_grad = True
-        #jump_mat.requires_grad = True
+        print('---------------------------------- batch idx {} -------------------------------------'.format(bs_idx))
+
+        error_hist = []
         def closure():
             tree_optim.zero_grad()
 
@@ -637,9 +684,8 @@ def get_reward(bs, actions, learnable_tree, tree_params, tree_optim, path_triple
             # bd_error = torch.nn.functional.mse_loss(bc_true, bd_nn)
             # function_error = torch.nn.functional.mse_loss(func.LHS_pde(lhs_func, x),
             #                                              func.RHS_pde(x))
-            loss = func.get_loss(cand_func, func.true_solution, x_t[:num_paths,...], jump_mat[:num_paths,...], brownian[:num_paths,...])
+            loss = func.get_loss(cand_func, func.true_solution, x_t, jump_mat, brownian)
             print('loss before: ', loss.item())
-            error_hist.append(loss.item())
             loss.backward()
             return loss
 
@@ -652,13 +698,18 @@ def get_reward(bs, actions, learnable_tree, tree_params, tree_optim, path_triple
         # bd_error = torch.nn.functional.mse_loss(bc_true, bd_nn)
         # regression_error = function_error + 100*bd_error
         # print('loss after: ', regression_error.item())
-        #x_t, jump_mat, brownian = func.get_paths(num_paths, dims=args.dim - 1)
-        #x_t.requires_grad = True
-        #jump_mat.requires_grad = True
-        #loss = func.get_loss(cand_func, func.true_solution, x_t, jump_mat, brownian)
-        #print(f'loss after, {loss}')
-        #error_hist.append(loss.item())
-
+        x_t, jump_mat, brownian = func.get_paths(num_paths, dims=args.dim-1)
+        x_t.requires_grad = True
+        jump_mat.requires_grad = True
+        loss = func.get_loss(cand_func, func.true_solution, x_t, jump_mat, brownian)
+        pts_per_dim = int(20000 / (args.dim - 1))
+        t = torch.rand(pts_per_dim, 1).cuda()
+        x1 = (torch.rand(pts_per_dim, args.dim - 1).cuda()) * (args.right - args.left) + args.left
+        x = torch.cat((t, x1), 1)
+        mse = torch.mean(torch.abs(func.true_solution(x) - trainable_tree(x, bs_action)) ** 2)
+        print(f'MSE After, {mse.item()}')
+        print(f'loss after, {loss}')
+        error_hist.append(loss.item())
         print(error_hist, ' min: ', min(error_hist))
         regression_errors.append(min(error_hist))
 
@@ -680,12 +731,14 @@ def true(x):
     return -0.5 * (torch.sum(x ** 2, dim=1, keepdim=True))
 
 
-def best_error(best_action, learnable_tree, tree_optim, path_triple):
+def best_error(best_action, learnable_tree, pts_per_dim=3):
     # t = torch.rand(args.domainbs, 1).cuda()
     # x1 = (torch.rand(args.domainbs, args.dim - 1).cuda()) * (args.right - args.left) + args.left
     # x = torch.cat((t, x1), 1)
     # x.requires_grad = True
-    x_t, jump_mat, brownian = path_triple
+    x_t, jump_mat, brownian = func.get_paths(num_paths, dims=args.dim-1)
+    x_t.requires_grad = True
+    jump_mat.requires_grad = True
     bs_action = best_action
 
     lhs_func = (learnable_tree, bs_action)
@@ -695,11 +748,12 @@ def best_error(best_action, learnable_tree, tree_optim, path_triple):
     # bd_nn = learnable_tree(bd_pts, bs_action)
     # bd_error = torch.nn.functional.mse_loss(bc_true, bd_nn)
     # function_error = torch.nn.functional.mse_loss(func.LHS_pde(lhs_func, x), func.RHS_pde(x))
-    loss = func.td_train(tree_optim, lhs_func, func.true_solution, x_t, jump_mat, brownian)
-    #loss = func.get_loss(lhs_func, func.true_solution, x_t, jump_mat, brownian)
-    #loss.backward()
-    #print(f'Avg Loss Along Trajectory: {loss}')
-    return loss
+    regression_error = func.get_loss(lhs_func, func.true_solution, x_t, jump_mat, brownian)
+
+    print(f'error: {regression_error}')
+
+    return regression_error
+
 
 def train_controller(Controller, Controller_optim, trainable_tree, tree_params, hyperparams):
     ### obtain a new file name ###
@@ -721,10 +775,6 @@ def train_controller(Controller, Controller_optim, trainable_tree, tree_params, 
 
     candidates = SaveBuffer(10)
 
-    x_t, jump_mat, brownian = func.get_paths(num_paths, dims=args.dim - 1)
-    x_t.requires_grad = True
-    jump_mat.requires_grad = True
-    path_triple = (x_t, jump_mat, brownian)
 
     tree_optim = None
     for step in range(hyperparams['controller_max_step']):
@@ -734,7 +784,7 @@ def train_controller(Controller, Controller_optim, trainable_tree, tree_params, 
         for action in actions:
             binary_code = binary_code + str(action[0].item())
 
-        rewards, formulas = get_reward(bs, actions, trainable_tree, tree_params, tree_optim, path_triple)
+        rewards, formulas = get_reward(bs, actions, trainable_tree, tree_params, tree_optim)
         rewards = torch.cuda.FloatTensor(rewards).view(-1, 1)
         # discount
         if 1 > hyperparams['discount'] > 0:
@@ -764,6 +814,7 @@ def train_controller(Controller, Controller_optim, trainable_tree, tree_params, 
         else:
             decay = hyperparams['ema_baseline_decay']
             baseline = decay * baseline + (1 - decay) * (rewards).mean()
+
 
         argsort = torch.argsort(rewards.squeeze(1), descending=True)
         # print(error, argsort)
@@ -816,8 +867,9 @@ def train_controller(Controller, Controller_optim, trainable_tree, tree_params, 
             action_string += str(v.item()) + '-'
         logger.append([666, 0, 0, action_string, candidate_.error.item(), candidate_.expression])
         # logger.append([666, 0, 0, 0, candidate_.error.item(), candidate_.expression])
-    finetune = 100
+    finetune = len(str(dim))*5000 + 10000
     global count, leaves_cnt
+    cand_number = 0
     for candidate_ in candidates.candidates:
         trainable_tree = learnable_compuatation_tree()
         trainable_tree = trainable_tree.cuda()
@@ -833,10 +885,51 @@ def train_controller(Controller, Controller_optim, trainable_tree, tree_params, 
                 params.append(param)
 
         reset_params(params)
-        tree_optim = torch.optim.Adam(params, lr=1e-3)
+        ## COARSE TUNE TO SPEED UP FINE-TUNE:
+        x_t, jump_mat, brownian = func.get_paths(num_paths, dims=args.dim - 1)
+        x_t.requires_grad = True
+        jump_mat.requires_grad = True
+        cand_func = (trainable_tree, candidate_.action)
+        tree_optim = torch.optim.Adam(params, lr=1e-2)
+        for _ in range(20):
+            loss = func.get_loss(cand_func, func.true_solution, x_t, jump_mat, brownian)
+            tree_optim.zero_grad()
+            loss.backward()
+            tree_optim.step()
+        tree_optim = torch.optim.LBFGS(params, lr=1, max_iter=20)
+        def closure():
+            tree_optim.zero_grad()
+            loss = func.get_loss(cand_func, func.true_solution, x_t, jump_mat, brownian)
+            loss.backward()
+            return loss
+        tree_optim.step(closure)
+        ## END COARSE TUNE CODE
 
+        ## USING COARSE TUNE, ADJUST STRUCTURE BY SETTING PARAMETERS EQUAL
+        if clustering:
+            clusters = []
+            for param in params:
+                if param.shape[-1] == args.dim:
+                    cluster = [hcluster.fclusterdata(np.expand_dims(param[0, :].cpu().detach().numpy(), -1), thresh,
+                                                  criterion="distance") - 1]
+                    clusters.append(cluster)
+
+
+            trainable_tree = learnable_compuatation_tree(clusters)
+
+        tree_optim = torch.optim.Adam(params, lr=1e-3)
+        error_list = []
         for current_iter in range(finetune):
-            error = best_error(candidate_.action, trainable_tree, tree_optim, path_triple)
+            error = best_error(candidate_.action, trainable_tree)
+            error_list.append(error.item())
+            tree_optim.zero_grad()
+            error.backward()
+
+            # for para in params:
+            #     if para is not None:
+            #         print(para.grad)
+            tree_optim.step()
+
             count = 0
             leaves_cnt = 0
             formula = inorder_visualize(basic_tree(), candidate_.action, trainable_tree)
@@ -849,35 +942,24 @@ def train_controller(Controller, Controller_optim, trainable_tree, tree_params, 
             # if smallest_error <= 1e-10:
             #     logger.append([current_iter, 0, 0, 0, error.item(), formula])
             #     return
-            cosine_lr(tree_optim, 1e-2, current_iter, finetune)
+            cosine_lr(tree_optim, 1e-3, current_iter, finetune)
             print(suffix)
+            print(clusters)
+            if current_iter == finetune - 1:
+                relative, mse = func.get_errors(trainable_tree, candidate_.action, args.dim - 1)
 
-            pts_per_dim = int(20000 / (args.dim - 1))
-            t = torch.rand(pts_per_dim, 1).cuda()
-            x1 = (torch.rand(pts_per_dim, args.dim - 1).cuda()) * (args.right - args.left) + args.left
-            x = torch.cat((t, x1), 1)
-            mse = torch.mean((func.true_solution(x) - trainable_tree(x, candidate_.action)) ** 2)
-            print(mse)
-
-        numerators = []
-        denominators = []
-
-        for i in range(1000):
-            print(i)
-            # x = (torch.rand(100000, args.dim).cuda()) * (args.right - args.left) + args.left
-            pts_per_dim = int(20000 / (args.dim - 1))
-            t = torch.rand(pts_per_dim, 1).cuda()
-            x1 = (torch.rand(pts_per_dim, args.dim - 1).cuda()) * (args.right - args.left) + args.left
-            x = torch.cat((t, x1), 1)
-            sq_de = torch.mean((func.true_solution(x)) ** 2)
-            sq_nu = torch.mean((func.true_solution(x) - trainable_tree(x, candidate_.action)) ** 2)
-            numerators.append(sq_nu.item())
-            denominators.append(sq_de.item())
-
-        relative_l2 = math.sqrt(sum(numerators)) / math.sqrt(sum(denominators))
-        print('relative l2 error: ', relative_l2)
-        logger.append(['relative_l2', 0, 0, 0, relative_l2, 0])
-
+        plt.figure(cand_number)
+        plt.plot(error_list)
+        plt.yscale('log')
+        plt.xlabel('Iteration')
+        plt.ylabel('Loss (log scale)')
+        title = str(args.dim) + ' Dimensional Problem - Finetune Loss Plot'
+        plt.title(title)
+        plt.text(len(error_list)*.5, .75*max(error_list), f'MSE = {mse}', fontsize=12)
+        plt.text(len(error_list)*.5, .65*max(error_list), f'Relative L2 = {relative}', fontsize=12)
+        name = 'cand' + str(cand_number) + '_dims' + str(args.dim) + '_plot.png'
+        plt.savefig(name, format='png')
+        cand_number += 1
 
 def cosine_lr(opt, base_lr, e, epochs):
     lr = 0.5 * base_lr * (math.cos(math.pi * e / epochs) + 1)
