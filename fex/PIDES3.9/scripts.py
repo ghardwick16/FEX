@@ -2,12 +2,18 @@ import os
 import time
 import random
 
-gpus = [1,7,8,9,2,3,4,5,6]*5
+gpus = [0]*200
 idx = 0
+for dim in [101]:
+    for var in [.0001]:
+        for _ in range(1):
+            gpu = gpus[idx]
+            idx += 1
+            thresh = 1/(dim**2)
+            #epochs = min(50, int(1/2*(dim-1) + 20))
+            epochs = 50
+            os.system('python controller_PIDESv2.py --epoch ' + str(epochs) + ' --bs 10 --greedy 0.1 --gpu ' + str(
+            gpu) + ' --ckpt t_range_0_1_2ksearch_int20k_bd4kDim' + str(
+            dim) + ' --tree depth2_sub --random_step 3 --lr 0.001 --dim ' + str(
+            dim) + ' --base 1000 --left 0 --right 1 --clustering_thresh ' + str(thresh) + ' --var ' + str(var))
 
-for i in range(5):
-    for dim in [6]:
-        gpu = gpus[idx]
-        idx += 1
-        os.system('python controller_PIDESv2.py --epoch 150 --bs 10 --greedy 0.1 --gpu '+str(gpu)+' --ckpt t_range_0_1_2ksearch_int20k_bd4kDim'+str(dim)+' --tree depth2_sub --random_step 3 --lr 0.002 --dim '+str(dim)+' --base 1000 --left 0 --right 1 --domainbs 1000 --bdbs 1000')
-        time.sleep(500)

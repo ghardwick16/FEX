@@ -370,8 +370,13 @@ def inorder_visualize(tree, actions, trainable_tree):
         rightfun = inorder_visualize(tree.rightChild, actions, trainable_tree)
         if leftfun is None and rightfun is None:
             w = []
-            for i in range(dim):
-                w.append(trainable_tree.linear[leaves_cnt].weight[0][i].item())
+            if trainable_tree.clustering:
+                combined_weight = trainable_tree.linear[leaves_cnt].weight[0, trainable_tree.linear[leaves_cnt].clustering]
+                for i in range(dim):
+                    w.append(combined_weight[0, i])
+            else:
+                for i in range(dim):
+                    w.append(trainable_tree.linear[leaves_cnt].weight[0][i].item())
                 # w2 = trainable_tree.linear[leaves_cnt].weight[0][1].item()
             bias = trainable_tree.linear[leaves_cnt].bias[0].item()
             leaves_cnt = leaves_cnt + 1
@@ -448,7 +453,10 @@ class leaf(nn.Module):
         self.clustering = clustering
         self.in_features = in_features
         out_features = 1  # this is only to be used for leaves in FEX, so out features is always 1
-        self.weight = Parameter(torch.empty((out_features, in_features), **factory_kwargs))
+        if clustering:
+            self.weight = Parameter(torch.empty((out_features, int(np.max(clustering) + 1)), **factory_kwargs))
+        else:
+            self.weight = Parameter(torch.empty((out_features, in_features), **factory_kwargs))
         if bias:
             self.bias = Parameter(torch.empty(out_features, **factory_kwargs))
         else:
@@ -461,8 +469,7 @@ class leaf(nn.Module):
 
     def forward(self, input: Tensor) -> Tensor:
         if self.clustering:
-            combined_weight = self.weight[0, self.clustering]
-            return F.linear(input, combined_weight, self.bias)
+            return F.linear(input, self.weight[:, self.clustering].squeeze(0), self.bias)
         else:
             return F.linear(input, self.weight, self.bias)
 
@@ -773,7 +780,7 @@ def train_controller(Controller, Controller_optim, trainable_tree, tree_params, 
     bs = args.bs
     smallest_error = float('inf')
 
-    candidates = SaveBuffer(10)
+    candidates = SaveBuffer(5)
 
 
     tree_optim = None
@@ -867,7 +874,7 @@ def train_controller(Controller, Controller_optim, trainable_tree, tree_params, 
             action_string += str(v.item()) + '-'
         logger.append([666, 0, 0, action_string, candidate_.error.item(), candidate_.expression])
         # logger.append([666, 0, 0, 0, candidate_.error.item(), candidate_.expression])
-    finetune = len(str(dim))*5000 + 10000
+    finetune = len(str(dim))*5000 + 12500
     global count, leaves_cnt
     cand_number = 0
     for candidate_ in candidates.candidates:
@@ -916,9 +923,40 @@ def train_controller(Controller, Controller_optim, trainable_tree, tree_params, 
 
 
             trainable_tree = learnable_compuatation_tree(clusters)
-
+            params = []
+            for idx, v in enumerate(trainable_tree.learnable_operator_set):
+                if idx not in leaves_index:
+                    for modules in trainable_tree.learnable_operator_set[v]:
+                        for param in modules.parameters():
+                            params.append(param)
+            for module in trainable_tree.linear:
+                for param in module.parameters():
+                    params.append(param)
+            '''
+            ## COARSE TUNE WITH NEW STRUCTURE TO SPEED UP FINE-TUNE:
+            x_t, jump_mat, brownian = func.get_paths(num_paths, dims=args.dim - 1)
+            x_t.requires_grad = True
+            jump_mat.requires_grad = True
+            cand_func = (trainable_tree, candidate_.action)
+            tree_optim = torch.optim.Adam(params, lr=1e-2)
+            for _ in range(20):
+                loss = func.get_loss(cand_func, func.true_solution, x_t, jump_mat, brownian)
+                tree_optim.zero_grad()
+                loss.backward()
+                tree_optim.step()
+            tree_optim = torch.optim.LBFGS(params, lr=1, max_iter=50)
+            
+            def closure():
+                tree_optim.zero_grad()
+                loss = func.get_loss(cand_func, func.true_solution, x_t, jump_mat, brownian)
+                loss.backward()
+                return loss
+            tree_optim.step(closure)
+            ## END COARSE TUNE CODE
+            '''
         tree_optim = torch.optim.Adam(params, lr=1e-3)
         error_list = []
+        relatives = []
         for current_iter in range(finetune):
             error = best_error(candidate_.action, trainable_tree)
             error_list.append(error.item())
@@ -944,22 +982,33 @@ def train_controller(Controller, Controller_optim, trainable_tree, tree_params, 
             #     return
             cosine_lr(tree_optim, 1e-3, current_iter, finetune)
             print(suffix)
-            print(clusters)
+            #if (current_iter+1) % 100 == 0:
+            #    _, relative, _ = func.get_errors(trainable_tree, candidate_.action, args.dim - 1)
+            #    relatives.append(relative.item())
             if current_iter == finetune - 1:
-                relative, mse = func.get_errors(trainable_tree, candidate_.action, args.dim - 1)
+                relative_l2, relative, mse = func.get_errors(trainable_tree, candidate_.action, args.dim - 1)
+                logger.append([f'RL2: {relative_l2}', f'REL: {relative}', f'MSE: {mse}', 0, 0, 0])
 
         plt.figure(cand_number)
         plt.plot(error_list)
         plt.yscale('log')
         plt.xlabel('Iteration')
         plt.ylabel('Loss (log scale)')
-        title = str(args.dim) + ' Dimensional Problem - Finetune Loss Plot'
+        title = 'Equation (3.9): ' + str(args.dim - 1) + ' Dimensional Problem - Finetune Loss Plot'
         plt.title(title)
-        plt.text(len(error_list)*.5, .75*max(error_list), f'MSE = {mse}', fontsize=12)
-        plt.text(len(error_list)*.5, .65*max(error_list), f'Relative L2 = {relative}', fontsize=12)
         name = 'cand' + str(cand_number) + '_dims' + str(args.dim) + '_plot.png'
         plt.savefig(name, format='png')
+
+        plt.figure(20 + cand_number)
+        plt.plot(relatives)
+        plt.xlabel('Iteration (in hundreds)')
+        plt.ylabel('Relative Error')
+        title = 'Equation (3.9): ' + str(args.dim - 1) + ' Dimensional Problem - Relative Error Plot'
+        plt.title(title)
+        name = 'cand' + str(cand_number) + '_dims' + str(args.dim) + '_relative_plot.png'
+        plt.savefig(name, format='png')
         cand_number += 1
+
 
 def cosine_lr(opt, base_lr, e, epochs):
     lr = 0.5 * base_lr * (math.cos(math.pi * e / epochs) + 1)

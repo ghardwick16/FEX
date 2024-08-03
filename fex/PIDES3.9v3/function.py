@@ -37,17 +37,17 @@ def get_paths(num_samples, dims):
             done = True
     # by factoring out an x_t from the calculation below we can subtract and add values to the jump matrix to make the computation a bit faster
     jump_mat = jump_mat.reshape((num_samples, steps, dims))
-    jump_term = torch.exp(jump_mat.reshape((num_samples, steps, dims))) - lam / steps * (
-            torch.exp(torch.tensor([mu + 1 / 2 * sigma ** 2]).cuda()) - 1)
+    #jump_term = torch.exp(jump_mat.reshape((num_samples, steps, dims))) - lam / steps * (
+    #        torch.exp(torch.tensor([mu + 1 / 2 * sigma ** 2]).cuda()) - 1)
     brownian_dist = torch.distributions.normal.Normal(0, 1 / steps)
     brownian = brownian_dist.sample((num_samples, steps, dims)).cuda()
-    pre_computed = theta * brownian + jump_term - lam * mu / steps
+    pre_computed = theta * brownian + jump_mat - lam * mu / steps
 
     # step 2: calculate trajectories of x_t, y_t given function u
     x_t = torch.empty_like(jump_mat).cuda()
     x_t[:, 0, :] = x_0
     for i in range(steps - 1):
-        x_t[:, i + 1, :] = x_t[:, i, :] * pre_computed[:, i, :]
+        x_t[:, i + 1, :] = x_t[:, i, :] + pre_computed[:, i, :]
     return x_t, jump_mat, brownian
 
 
@@ -86,6 +86,7 @@ def get_loss(func, true, x_t, jump_mat, brownian):
     tx_z = tx + torch.cat((torch.zeros(num_samples, steps, 1).cuda(), jump_mat), dim=2)
     # tx_z[..., 1:] += jump_mat
     u_tx_z = u(tx_z).squeeze()
+    '''
     # determine if det(sigma) is close enough to 0 to use dirac delta instead of phi for integration step:
     if sigma ** dims < 1e-7:  # using single precision
         z = mu * torch.ones(dims).cuda()
@@ -112,10 +113,39 @@ def get_loss(func, true, x_t, jump_mat, brownian):
         n2 = lam * (u(tx_shift).squeeze() - u_tx)
     # added the dims/2 coef in front of theta^2 so make the true solution 1/2||x|^2
     # f = lam/2 * (mu**2 + sigma**2) + dims/2 * theta**2
-    f = lam * mu ** 2 + theta ** 2
+    f = lam * (mu ** 2 + sigma**2) + 1/2 * theta ** 2
     v = torch.ones(u_tx.shape).cuda()
     grad_u = torch.autograd.grad(u_tx, tx, grad_outputs=v, create_graph=True)[0][:, :, 1:]
-    loss1 = torch.mean((2 / dims * (-f * dt + dims/2*sigma * torch.sum(grad_u[:, :-1, :] * brownian[:, :-1, :], dim=2) + u_tx_z[...,:-1] - dt * n2[...,:-1] - u_tx[..., 1:])) ** 2)
+    loss1 = torch.mean(((-f * dt + theta * torch.sum(grad_u[:, :-1, :] * brownian[:, :-1, :], dim=2) + u_tx_z[...,:-1] - dt * n2[...,:-1] - u_tx[..., 1:])) ** 2)
+    '''
+    ### EXP LOSS FN (TD BASED)
+    v = torch.ones(u_tx.shape).cuda()
+    du = torch.autograd.grad(u_tx, tx, grad_outputs=v, create_graph=True)[0]
+    ut = du[..., 0]
+    ux = torch.squeeze(du[..., 1:])
+
+    hes_diag = torch.empty_like(x_t).cuda()
+    v1 = torch.ones_like(x_t).cuda()
+    if du.requires_grad:
+        hes_diag[..., :] = torch.autograd.grad(du[..., 1:], tx, grad_outputs=v1, create_graph=True)[0][..., 1:]
+    else:
+        hes_diag = torch.zeros_like(du).cuda()
+    trace_hessian = torch.sum(hes_diag, dim=-1)
+
+    ### INT (u(t, x+z) - u(t,x)) d nu  (=n2 in PIDES paper)
+    #tx_shift = torch.empty_like(tx).cuda()
+    #tx_shift[:, :, :] = tx[:, :, :]
+    #tx_shift[..., 1:] += mu
+    #n2 = lam * (u(tx_shift).squeeze() - u_tx)
+
+    ### INT z * grad(u) d nu
+    z_vec = lam * mu * torch.ones_like(ux)
+    n3 = torch.sum(ux * z_vec, dim=-1)
+
+    loss1 = torch.mean(((ut[..., :-1] + 1 / 2 * theta ** 2 * trace_hessian[..., :-1] - n3[...,
+                                                                                       :-1]) * dt + theta * torch.sum(
+        ux[:, :-1, :] * brownian[:, :-1, :], dim=-1)
+                        + (u_tx_z[..., :-1] - u_tx[..., :-1]) - (u_tx[..., 1:] - u_tx[..., :-1])) ** 2)
 
     # Step 2:  loss2
     final_xt = torch.cat((t[:, -1, :].unsqueeze(1), x_t[:, -1, :].unsqueeze(1)), dim=2).cuda()
@@ -141,7 +171,7 @@ def true_solution(tx):  # here the true solution is 1/d ||x||^2 i.e. the mean of
     # UNDONE:
     # modified true solution to be 1/2||x||^2
     return 1 / 2 * torch.sum(tx[..., 1:] ** 2, dim=-1)
-    # return 1/(tx.shape[-1] - 1) * torch.sum(tx[...,1:]**2, dim=-1)
+    #return 1/(tx.shape[-1] - 1) * torch.sum(tx[...,1:]**2, dim=-1)
 
 
 def get_errors(learnable_tree, bs_action, dims):
@@ -149,6 +179,8 @@ def get_errors(learnable_tree, bs_action, dims):
     pts_per_dim = int(20000 / dims)
     mse_list = []
     denom = []
+    relative_num = []
+    relative_denom = []
     for _ in range(1000):
         t = torch.rand(pts_per_dim, 1).cuda()
         x1 = torch.rand(pts_per_dim, dims).cuda()
@@ -156,10 +188,13 @@ def get_errors(learnable_tree, bs_action, dims):
         #print(true_solution(x).shape)
         #print(u(x).shape)
         mse_list.append(torch.mean((true_solution(x) - u(x).squeeze()) ** 2))
+        relative_num.append(torch.mean(torch.abs(true_solution(x) - u(x).squeeze())))
+        relative_denom.append(torch.mean(torch.abs(true_solution(x))))
         denom.append(torch.mean(true_solution(x)**2))
-    relative = torch.sqrt(sum(mse_list))/torch.sqrt(sum(denom))
+    relative_l2 = torch.sqrt(sum(mse_list))/torch.sqrt(sum(denom))
+    relative = sum(relative_num)/sum(relative_denom)
     mse = 1 / 1000 * sum(mse_list)
-    return relative, mse
+    return relative_l2, relative, mse
 
 
 unary_functions = [lambda x: 0 * x ** 2,

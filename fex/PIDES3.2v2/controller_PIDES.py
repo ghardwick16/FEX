@@ -12,6 +12,7 @@ import function as func
 import argparse
 import random
 import math
+import matplotlib.pyplot as plt
 
 parser = argparse.ArgumentParser(description='NAS')
 
@@ -43,7 +44,7 @@ binary_functions_str = func.binary_functions_str
 left = args.left
 right = args.right
 dim = args.dim
-num_paths = 100
+num_paths = 500
 
 
 def get_boundary(num_pts, dim):
@@ -568,7 +569,7 @@ class Controller(torch.nn.Module):
             else:
                 action = torch.randint(0, structure_choice[idx], size=(batch_size, 1)).cuda()
             # print('old', action)
-            if args.greedy is not 0:
+            if args.greedy != 0:
                 for k in range(args.bs):
                     if np.random.rand(1) < args.greedy:
                         choice = random.choices(range(structure_choice[idx]), k=1)
@@ -817,6 +818,7 @@ def train_controller(Controller, Controller_optim, trainable_tree, tree_params, 
         # logger.append([666, 0, 0, 0, candidate_.error.item(), candidate_.expression]) 
     finetune = 20000
     global count, leaves_cnt
+    cand_number = 0
     for candidate_ in candidates.candidates:
         trainable_tree = learnable_compuatation_tree()
         trainable_tree = trainable_tree.cuda()
@@ -833,9 +835,10 @@ def train_controller(Controller, Controller_optim, trainable_tree, tree_params, 
 
         reset_params(params)
         tree_optim = torch.optim.Adam(params, lr=1e-2)
-
+        error_list = []
         for current_iter in range(finetune):
             error = best_error(candidate_.action, trainable_tree)
+            error_list.append(error.item())
             tree_optim.zero_grad()
             error.backward()
 
@@ -856,26 +859,24 @@ def train_controller(Controller, Controller_optim, trainable_tree, tree_params, 
             # if smallest_error <= 1e-10:
             #     logger.append([current_iter, 0, 0, 0, error.item(), formula])
             #     return
-            cosine_lr(tree_optim, 1e-2, current_iter, finetune)
+            cosine_lr(tree_optim, 1e-3, current_iter, finetune)
             print(suffix)
+            if current_iter == finetune - 1:
+                relative_l2, relative, mse = func.get_errors(trainable_tree, candidate_.action, args.dim - 1)
+                logger.append([f'RL2: {relative_l2}', f'REL: {relative}', f'MSE: {mse}', 0, 0, 0])
 
-        numerators = []
-        denominators = []
-
-        for i in range(1000):
-            print(i)
-            # x = (torch.rand(100000, args.dim).cuda()) * (args.right - args.left) + args.left
-            t = torch.rand(100000, 1).cuda()
-            x1 = (torch.rand(100000, args.dim - 1).cuda()) * (args.right - args.left) + args.left
-            x = torch.cat((t, x1), 1)
-            sq_de = torch.mean((func.true_solution(x)) ** 2)
-            sq_nu = torch.mean((func.true_solution(x) - trainable_tree(x, candidate_.action)) ** 2)
-            numerators.append(sq_nu.item())
-            denominators.append(sq_de.item())
-
-        relative_l2 = math.sqrt(sum(numerators)) / math.sqrt(sum(denominators))
-        print('relative l2 error: ', relative_l2)
-        logger.append(['relative_l2', 0, 0, 0, relative_l2, 0])
+        plt.figure(cand_number)
+        plt.plot(error_list)
+        plt.yscale('log')
+        plt.xlabel('Iteration')
+        plt.ylabel('Loss (log scale)')
+        title = 'Equation (3.2): Pure Jump Process - Finetune Loss Plot'
+        plt.title(title)
+        #plt.text(len(error_list)*.5, .75*max(error_list), f'MSE = {mse}', fontsize=12)
+        #plt.text(len(error_list)*.5, .25*max(error_list), f'Relative L2 = {relative}', fontsize=12)
+        name = 'cand' + str(cand_number) + '_dims' + str(args.dim) + '_plot.png'
+        plt.savefig(name, format='png')
+        cand_number += 1
 
 
 def cosine_lr(opt, base_lr, e, epochs):

@@ -36,7 +36,7 @@ def get_paths(num_samples):
     # by factoring out an x_t from the calculation below we can subtract and add values to the jump matrix to make the computation a bit faster
     jump_mat = jump_mat.reshape((num_samples, steps))
     jump_term = torch.exp(jump_mat.reshape((num_samples, steps))) - lam / steps * (
-                torch.exp(torch.tensor([mu + 1 / 2 * sigma ** 2]).cuda()) - 1)
+            torch.exp(torch.tensor([mu + 1 / 2 * sigma ** 2]).cuda()) - 1)
     # step 2: calculate trajectory of x_t
     x_t = torch.empty_like(jump_mat).cuda()
     x_t[:, 0] = x_0
@@ -58,18 +58,18 @@ def get_loss(func, true, x_t, jump_mat):
     mu = .4
     sigma = .25
     lam = .3
-    theta = .3
+    theta = 0
     steps = 50
     domain = [0, 1]
 
-    num_pts = 10
+    num_pts = 50
     dt = (domain[1] - domain[0]) / x_t.shape[1]
     # Step 1:  loss1
     # Loss1, TD_error at t_n is given, in (2.20).  Note that we made a simplifying assumption
     # that only one jump occurs per time step, so the sum is a single value (in practice, if
     # two jumps occur, we simply sum them)
-    z = torch.linspace(start=domain[0], end=domain[1], steps=num_pts).cuda()
-    phi = 1 / (torch.sqrt(2 * torch.Tensor([math.pi]).cuda() * sigma)) * torch.exp(-.5 / sigma ** 2 * (z - mu) ** 2)
+    z = torch.linspace(start=mu-3*sigma, end=mu+3*sigma, steps=num_pts).cuda()
+    phi = 1 / (torch.sqrt(2 * torch.Tensor([math.pi]).cuda()) * sigma) * torch.exp(-.5 / sigma ** 2 * (z - mu) ** 2)
     t = torch.linspace(start=domain[0], end=domain[1], steps=x_t.shape[1]).repeat(x_t.shape[0], 1).cuda()
     # dims are (integration pts, batch_size, time steps, dims)
     tx_expz = torch.cat((t.unsqueeze(1).repeat(1, num_pts, 1).unsqueeze(3), (
@@ -80,7 +80,7 @@ def get_loss(func, true, x_t, jump_mat):
     u_tx = torch.squeeze(u(torch.cat((t.unsqueeze(2), x_t.unsqueeze(2)), dim=2)))
     u_expz = torch.squeeze(u(tx_expz))
     integral = torch.trapezoid(u_expz * phi.unsqueeze(1).repeat(x_t.shape[0], 1, x_t.shape[1]),
-                                dx=(domain[1] - domain[0]) / num_pts, dim=1)
+                                dx=(6*sigma) / num_pts, dim=1)
     n2 = lam * (integral - u_tx)
 
     loss1 = torch.mean((u_exp_jumps[..., :-1] - dt * n2[..., :-1] - u_tx[..., 1:]) ** 2)
@@ -90,13 +90,13 @@ def get_loss(func, true, x_t, jump_mat):
     #final_xt.requires_grad = True
     u_final = torch.squeeze(u(final_xt))
     true_final = torch.squeeze(true(final_xt))
-    loss2 = torch.mean(torch.abs(u_final - true_final))
+    loss2 = torch.mean(torch.abs(u_final - true_final)**2)
 
     # Step 3: loss3
     v = torch.ones(u_final.shape).cuda()
     du = torch.autograd.grad(u_final, final_xt, grad_outputs=v, create_graph=True)[0]
     dg = torch.autograd.grad(true_final, final_xt, grad_outputs=v, create_graph=True)[0]
-    loss3 = torch.mean(torch.abs(du[:, 1:] - dg[:, 1:]))
+    loss3 = torch.mean(torch.abs(du[:, 1:] - dg[:, 1:])**2)
 
     # Step 4: add them up
     loss = loss1 + loss2 + loss3
@@ -107,6 +107,27 @@ def get_loss(func, true, x_t, jump_mat):
 def true_solution(tx):  # for the most simple case, u(t,x) = x
     return tx[..., 1:]
 
+def get_errors(learnable_tree, bs_action, dims):
+    u = lambda y: learnable_tree(y, bs_action)
+    pts_per_dim = int(100 / dims)
+    mse_list = []
+    denom = []
+    relative_num = []
+    relative_denom = []
+    for _ in range(10000):
+        t = torch.rand(pts_per_dim, 1).cuda()
+        x1 = torch.rand(pts_per_dim, dims).cuda()
+        x = torch.cat((t, x1), 1)
+        #print(true_solution(x).shape)
+        #print(u(x).shape)
+        mse_list.append(torch.mean((true_solution(x) - u(x).squeeze()) ** 2))
+        relative_num.append(torch.mean(torch.abs(true_solution(x) - u(x).squeeze())))
+        relative_denom.append(torch.mean(torch.abs(true_solution(x))))
+        denom.append(torch.mean(true_solution(x)**2))
+    relative_l2 = torch.sqrt(sum(mse_list))/torch.sqrt(sum(denom))
+    relative = sum(relative_num)/sum(relative_denom)
+    mse = 1 / 1000 * sum(mse_list)
+    return relative_l2, relative, mse
 
 unary_functions = [lambda x: 0 * x ** 2,
                    lambda x: 1 + 0 * x ** 2,

@@ -6,28 +6,36 @@ import tools
 import scipy
 from utils import Logger, mkdir_p
 import os
-import torch.nn as nn
 from computational_tree import BinaryTree
 import function as func
 import argparse
 import random
 import math
+import matplotlib.pyplot as plt
+import scipy.cluster.hierarchy as hcluster
+from torch.nn.parameter import Parameter, UninitializedParameter
+from torch import Tensor
+import torch.nn as nn
+import itertools
+import time
 
 parser = argparse.ArgumentParser(description='NAS')
 
 parser.add_argument('--left', default=0, type=float)
 parser.add_argument('--right', default=1, type=float)
-parser.add_argument('--epoch', default=200, type=int)
+parser.add_argument('--epoch', default=2000, type=int)
 parser.add_argument('--bs', default=1, type=int)
 parser.add_argument('--greedy', default=0, type=float)
 parser.add_argument('--random_step', default=0, type=float)
 parser.add_argument('--ckpt', default='', type=str)
 parser.add_argument('--gpu', default=0, type=int)
-parser.add_argument('--dim', default=2, type=int)
+parser.add_argument('--dim', default=5, type=int)
 parser.add_argument('--tree', default='depth2', type=str)
 parser.add_argument('--lr', default=1e-2, type=float)
 parser.add_argument('--percentile', default=0.5, type=float)
 parser.add_argument('--base', default=100, type=int)
+parser.add_argument('--clustering_thresh', default=None, type=float)
+parser.add_argument('--var', default=1e-4, type=float)
 # parser.add_argument('--domainbs', default=1000, type=int)
 # parser.add_argument('--bdbs', default=1000, type=int)
 args = parser.parse_args()
@@ -36,6 +44,8 @@ os.environ['CUDA_VISIBLE_DEVICES'] = str(args.gpu)
 
 unary = func.unary_functions
 binary = func.binary_functions
+deriv_unary = func.unary_function_derivatives
+dderiv_unary = func.unary_function_2nd_derivatives
 unary_functions_str = func.unary_functions_str
 unary_functions_str_leaf = func.unary_functions_str_leaf
 binary_functions_str = func.binary_functions_str
@@ -43,7 +53,13 @@ binary_functions_str = func.binary_functions_str
 left = args.left
 right = args.right
 dim = args.dim
-num_paths = 100
+sigma = args.var
+num_paths = 500
+if args.clustering_thresh:
+    thresh = args.clustering_thresh
+    clustering = True
+else:
+    clustering = False
 
 
 def get_boundary(num_pts, dim):
@@ -55,10 +71,11 @@ def get_boundary(num_pts, dim):
 
 
 class candidate(object):
-    def __init__(self, action, expression, error):
+    def __init__(self, action, expression, error, clusters):
         self.action = action
         self.expression = expression
         self.error = error
+        self.clusters = clusters
 
 
 class SaveBuffer(object):
@@ -359,8 +376,14 @@ def inorder_visualize(tree, actions, trainable_tree):
         rightfun = inorder_visualize(tree.rightChild, actions, trainable_tree)
         if leftfun is None and rightfun is None:
             w = []
-            for i in range(dim):
-                w.append(trainable_tree.linear[leaves_cnt].weight[0][i].item())
+            if trainable_tree.clustering:
+                combined_weight = trainable_tree.linear[leaves_cnt].weight[
+                    0, trainable_tree.linear[leaves_cnt].clustering]
+                for i in range(dim):
+                    w.append(combined_weight[0, i])
+            else:
+                for i in range(dim):
+                    w.append(trainable_tree.linear[leaves_cnt].weight[0][i].item())
                 # w2 = trainable_tree.linear[leaves_cnt].weight[0][1].item()
             bias = trainable_tree.linear[leaves_cnt].bias[0].item()
             leaves_cnt = leaves_cnt + 1
@@ -427,6 +450,37 @@ def get_function_trainable_params(actions, unary_choices):
     return computation_tree
 
 
+class leaf(nn.Module):
+    ## Clustering is a list that gives numbers to each cluster of weights i.e. [0, 0, 1, 1, 1] means that
+    ## x0, x1 have same weight and x2, x3, x4 have same weight
+    def __init__(self, in_features: int, out_features: int, bias: bool = True,
+                 device=None, dtype=None, clustering=None) -> None:
+        factory_kwargs = {'device': device, 'dtype': dtype}
+        super().__init__()
+        self.clustering = clustering
+        self.in_features = in_features
+        out_features = 1  # this is only to be used for leaves in FEX, so out features is always 1
+        if clustering:
+            self.weight = Parameter(torch.empty((out_features, int(np.max(clustering) + 1)), **factory_kwargs))
+        else:
+            self.weight = Parameter(torch.empty((out_features, in_features), **factory_kwargs))
+        if bias:
+            self.bias = Parameter(torch.empty(out_features, **factory_kwargs))
+        else:
+            self.register_parameter('bias', None)
+        self.reset_parameters()
+
+    def reset_parameters(self) -> None:
+        for param in self.parameters():
+            param.data.normal_(0.0, 0.1)
+
+    def forward(self, input: Tensor) -> Tensor:
+        if self.clustering:
+            return F.linear(input, self.weight[:, self.clustering].squeeze(0), self.bias)
+        else:
+            return F.linear(input, self.weight, self.bias)
+
+
 class unary_operation(nn.Module):
     def __init__(self, operator, is_leave):
         super(unary_operation, self).__init__()
@@ -480,10 +534,16 @@ def compute_by_tree(tree, linear, x):
         return tree.key(compute_by_tree(tree.leftChild, linear, x), compute_by_tree(tree.rightChild, linear, x))
 
 
+## Clustering is a list of lists, the ith list corresponding to the clustering of the ith leaf.  If no clustering is
+## desired for a given leaf, then that leaf's clustering list should just be range(dims) (i.e. [0,1,2,...,d])
+
+## If no clustering is wanted at all, then pass in no argument for clustering and learnable_computation_tree will
+## behave as usual
 class learnable_compuatation_tree(nn.Module):
-    def __init__(self):
+    def __init__(self, clustering=None):
         super(learnable_compuatation_tree, self).__init__()
         self.learnable_operator_set = {}
+        self.clustering = clustering
         for i in range(len(structure)):
             self.learnable_operator_set[i] = []
             is_leave = i in leaves_index
@@ -493,7 +553,10 @@ class learnable_compuatation_tree(nn.Module):
                 self.learnable_operator_set[i].append(binary_operation(binary[j]))
         self.linear = []
         for num, i in enumerate(range(leaves)):
-            linear_module = torch.nn.Linear(dim, 1, bias=True).cuda()  # set only one variable
+            if clustering:
+                linear_module = leaf(dim, 1, bias=True, clustering=self.clustering[i]).cuda()  # set only one variable
+            else:
+                linear_module = leaf(dim, 1, bias=True).cuda()
             linear_module.weight.data.normal_(0, 1 / math.sqrt(dim))
             # linear_module.weight.data[0, num%2] = 1
             linear_module.bias.data.fill_(0)
@@ -568,7 +631,7 @@ class Controller(torch.nn.Module):
             else:
                 action = torch.randint(0, structure_choice[idx], size=(batch_size, 1)).cuda()
             # print('old', action)
-            if args.greedy is not 0:
+            if args.greedy != 0:
                 for k in range(args.bs):
                     if np.random.rand(1) < args.greedy:
                         choice = random.choices(range(structure_choice[idx]), k=1)
@@ -591,81 +654,96 @@ class Controller(torch.nn.Module):
 
 
 def get_reward(bs, actions, learnable_tree, tree_params, tree_optim):
-    # x = (torch.rand(args.domainbs, dim).cuda())*(args.right-args.left)+args.left
-
-    # print(x)
     regression_errors = []
     formulas = []
     batch_size = bs
-
     global count, leaves_cnt
-
     for bs_idx in range(batch_size):
-        x_t, jump_mat = func.get_paths(num_paths)
-        x_t.requires_grad = True
-        jump_mat.requires_grad = True
         bs_action = [v[bs_idx] for v in actions]
         cand_func = (learnable_tree, bs_action)
-        # regression_error = torch.nn.functional.mse_loss(learnable_tree(x, bs_action), func.true_solution(x))
-
         reset_params(tree_params)
-        tree_optim = torch.optim.Adam(tree_params, lr=0.001)
+        tree_optim = torch.optim.Adam(tree_params, lr=1e-2)
+        error_hist = []
+        #x_t = func.get_pts(num_paths, dim - 1)
         for _ in range(20):
-            # bd_pts = get_boundary(args.bdbs, dim)
-            # bc_true = func.true_solution(bd_pts)
-            # bd_nn = learnable_tree(bd_pts, bs_action)
-            # bd_error = torch.nn.functional.mse_loss(bc_true, bd_nn)
-
-            # changing LHS_pde function to simply take the learnable tree directly for ease of computation of the
-            # integral
-            # function_error = torch.nn.functional.mse_loss(func.LHS_pde(lhs_func, x), func.RHS_pde(x))
-            loss = func.get_loss(cand_func, func.true_solution, x_t, jump_mat)
+            x_t = func.get_pts(num_paths, dim - 1)
+            loss = func.get_loss(cand_func, func.true_solution, x_t, sigma)
             tree_optim.zero_grad()
             loss.backward()
+            #error_hist.append(loss.item())
             tree_optim.step()
-
         tree_optim = torch.optim.LBFGS(tree_params, lr=1, max_iter=20)
         print('---------------------------------- batch idx {} -------------------------------------'.format(bs_idx))
-
-        error_hist = []
-
         def closure():
             tree_optim.zero_grad()
-
-            # bd_pts = get_boundary(args.bdbs, dim)
-            # bc_true = func.true_solution(bd_pts)
-            # bd_nn = learnable_tree(bd_pts, bs_action)
-            # bd_error = torch.nn.functional.mse_loss(bc_true, bd_nn)
-            # function_error = torch.nn.functional.mse_loss(func.LHS_pde(lhs_func, x),
-            #                                              func.RHS_pde(x))
-            loss = func.get_loss(cand_func, func.true_solution, x_t, jump_mat)
+            x_t = func.get_pts(num_paths, dim - 1)
+            loss = func.get_loss(cand_func, func.true_solution, x_t, sigma)
             print('loss before: ', loss.item())
-            error_hist.append(loss.item())
             loss.backward()
+            error_hist.append(loss.item())
             return loss
-
         tree_optim.step(closure)
+        '''
+        ## USING COARSE TUNE, ADJUST STRUCTURE BY SETTING PARAMETERS EQUAL
+        loss = func.loss = func.get_loss(cand_func, func.true_solution, x_t, sigma)
+        if clustering and loss == loss:
+            clusters = []
+            for param in tree_params:
+                if param.shape[-1] == args.dim:
+                    cluster = [hcluster.fclusterdata(np.expand_dims(param[0, :].cpu().detach().numpy(), -1), thresh,
+                                                     criterion="distance") - 1]
+                    clusters.append(cluster)
 
-        # function_error = torch.nn.functional.mse_loss(func.LHS_pde(lhs_func, x), func.RHS_pde(x))
-        # bd_pts = get_boundary(args.bdbs, dim)
-        # bc_true = func.true_solution(bd_pts)
-        # bd_nn = learnable_tree(bd_pts, bs_action)
-        # bd_error = torch.nn.functional.mse_loss(bc_true, bd_nn)
-        # regression_error = function_error + 100*bd_error
-        # print('loss after: ', regression_error.item())
-        x_t, jump_mat = func.get_paths(num_paths)
-        x_t.requires_grad = True
-        jump_mat.requires_grad = True
-        loss = func.get_loss(cand_func, func.true_solution, x_t, jump_mat)
-        print(f'loss after, {loss}')
-        error_hist.append(loss.item())
+            learnable_tree = learnable_compuatation_tree(clusters)
+            tree_params = []
+            for idx, v in enumerate(learnable_tree.learnable_operator_set):
+                if idx not in leaves_index:
+                    for modules in learnable_tree.learnable_operator_set[v]:
+                        for param in modules.parameters():
+                            tree_params.append(param)
+            for module in learnable_tree.linear:
+                for param in module.parameters():
+                    tree_params.append(param)
 
-        print(error_hist, ' min: ', min(error_hist))
+            ## COARSE TUNE WITH NEW STRUCTURE TO SPEED UP FINE-TUNE:
+            cand_func = (learnable_tree, bs_action)
+            tree_optim = torch.optim.Adam(tree_params, lr=1e-2)
+            for _ in range(20):
+                x_t = func.get_pts(num_paths, dim - 1)
+                #x_t.requires_grad = True
+                loss = func.get_loss(cand_func, func.true_solution, x_t, sigma)
+                tree_optim.zero_grad()
+                #print('loss before: ', loss.item())
+                #error_hist.append(loss.item())
+                loss.backward()
+                tree_optim.step()
+            tree_optim = torch.optim.LBFGS(tree_params, lr=1, max_iter=20)
+            tree_optim.step(closure)
+            
+            tree_optim = torch.optim.Adam(tree_params, lr=1e-3)
+            for _ in range(100):
+                x_t = func.get_pts(num_paths, dims=args.dim - 1)
+                x_t.requires_grad = True
+                loss = func.get_loss(cand_func, func.true_solution, x_t, sigma)
+                tree_optim.zero_grad()
+                print('loss before: ', loss.item())
+                error_hist.append(loss.item())
+                loss.backward()
+                tree_optim.step()
+
+            ## END COARSE TUNE CODE
+
+            '''
+        #x_t = func.get_pts(num_paths, dim - 1)
+        #loss = func.get_loss(cand_func, func.true_solution, x_t, sigma)
+        #print(f'loss after, {loss}')
+        #error_hist.append(loss.item())
+        print('min: ', min(error_hist))
         regression_errors.append(min(error_hist))
 
         count = 0
         leaves_cnt = 0
-        formula = inorder_visualize(basic_tree(), bs_action, trainable_tree)
+        formula = inorder_visualize(basic_tree(), bs_action, learnable_tree)
         count = 0
         leaves_cnt = 0
         formulas.append(formula)
@@ -680,15 +758,113 @@ def discount(x, amount):
 def true(x):
     return -0.5 * (torch.sum(x ** 2, dim=1, keepdim=True))
 
+# restructure and re-tune a coarse-tuned tree
+def restruct_and_tune(action, pre_its, tune_its, thresh):
+    trainable_tree = learnable_compuatation_tree().cuda()
+    cand_func = (trainable_tree, action)
+    params = []
+    for idx, v in enumerate(trainable_tree.learnable_operator_set):
+        if idx not in leaves_index:
+            for modules in trainable_tree.learnable_operator_set[v]:
+                for param in modules.parameters():
+                    params.append(param)
+    for module in trainable_tree.linear:
+        for param in module.parameters():
+            params.append(param)
+
+    tree_optim = torch.optim.Adam(params, lr=1e-2)
+    for _ in range(20):
+        x_t = func.get_pts(num_paths, dims=args.dim - 1)
+        loss = func.get_loss(cand_func, func.true_solution, x_t, sigma)
+        tree_optim.zero_grad()
+        loss.backward()
+        tree_optim.step()
+
+    tree_optim = torch.optim.LBFGS(params, lr=1, max_iter=20)
+
+    def closure():
+        x_t = func.get_pts(num_paths, dims=args.dim - 1)
+        tree_optim.zero_grad()
+        loss = func.get_loss(cand_func, func.true_solution, x_t, sigma)
+        loss.backward()
+        return loss
+
+    tree_optim.step(closure)
+
+    tree_optim = torch.optim.Adam(params, lr=1e-3)
+    for _ in range(pre_its):
+        x_t = func.get_pts(num_paths, dims=args.dim - 1)
+        loss = func.get_loss(cand_func, func.true_solution, x_t, sigma)
+        tree_optim.zero_grad()
+        loss.backward()
+        tree_optim.step()
+
+    for param in params:
+        if param.shape[-1] == args.dim:
+            for x in param[0]:
+                if x != x or x == float("inf") or x == float("-inf"):
+                    print('Could Not Cluster')
+                    return None, loss.item()
+
+    clusters = []
+    for param in params:
+        if param.shape[-1] == args.dim:
+            cluster = [hcluster.fclusterdata(np.expand_dims(param[0, :].cpu().detach().numpy(), -1), thresh,
+                                                 criterion="distance") - 1]
+            clusters.append(cluster)
+
+    new_tree = learnable_compuatation_tree(clusters)
+    params = []
+    for idx, v in enumerate(new_tree.learnable_operator_set):
+        if idx not in leaves_index:
+            for modules in new_tree.learnable_operator_set[v]:
+                for param in modules.parameters():
+                    params.append(param)
+    for module in new_tree.linear:
+        for param in module.parameters():
+            params.append(param)
+
+    ## COARSE TUNE WITH NEW STRUCTURE TO SPEED UP FINE-TUNE:
+    tree_optim = torch.optim.Adam(params, lr=1e-2)
+    for _ in range(20):
+        x_t = func.get_pts(num_paths, dims=args.dim - 1)
+        loss = func.get_loss(cand_func, func.true_solution, x_t, sigma)
+        tree_optim.zero_grad()
+        loss.backward()
+        tree_optim.step()
+
+    tree_optim = torch.optim.LBFGS(params, lr=1, max_iter=20)
+    def closure():
+        x_t = func.get_pts(num_paths, dims=args.dim - 1)
+        tree_optim.zero_grad()
+        loss = func.get_loss(cand_func, func.true_solution, x_t, sigma)
+        loss.backward()
+        return loss
+    tree_optim.step(closure)
+
+    #perform first steps of fine tuning:
+    tree_optim = torch.optim.Adam(params, lr=1e-3)
+    for _ in range(tune_its):
+        x_t = func.get_pts(num_paths, dims=args.dim - 1)
+        loss = func.get_loss(cand_func, func.true_solution, x_t, sigma)
+        tree_optim.zero_grad()
+        loss.backward()
+        tree_optim.step()
+
+    final_loss = loss.item()
+    if final_loss != final_loss:
+        final_loss = 1e10
+
+    return clusters, final_loss
+
 
 def best_error(best_action, learnable_tree):
     # t = torch.rand(args.domainbs, 1).cuda()
     # x1 = (torch.rand(args.domainbs, args.dim - 1).cuda()) * (args.right - args.left) + args.left
     # x = torch.cat((t, x1), 1)
     # x.requires_grad = True
-    x_t, jump_mat = func.get_paths(num_paths)
+    x_t = func.get_pts(num_paths, dims=args.dim - 1)
     x_t.requires_grad = True
-    jump_mat.requires_grad = True
     bs_action = best_action
 
     lhs_func = (learnable_tree, bs_action)
@@ -698,7 +874,7 @@ def best_error(best_action, learnable_tree):
     # bd_nn = learnable_tree(bd_pts, bs_action)
     # bd_error = torch.nn.functional.mse_loss(bc_true, bd_nn)
     # function_error = torch.nn.functional.mse_loss(func.LHS_pde(lhs_func, x), func.RHS_pde(x))
-    regression_error = func.get_loss(lhs_func, func.true_solution, x_t, jump_mat)
+    regression_error = func.get_loss(lhs_func, func.true_solution, x_t, sigma)
 
     print(f'error: {regression_error}')
 
@@ -707,7 +883,7 @@ def best_error(best_action, learnable_tree):
 
 def train_controller(Controller, Controller_optim, trainable_tree, tree_params, hyperparams):
     ### obtain a new file name ###
-    file_name = os.path.join(hyperparams['checkpoint'], 'log{}.txt')
+    file_name = os.path.join(hyperparams['checkpoint'], 'var_' + str(args.var) + 'log{}.txt')
     file_idx = 0
     while os.path.isfile(file_name.format(file_idx)):
         file_idx += 1
@@ -732,9 +908,18 @@ def train_controller(Controller, Controller_optim, trainable_tree, tree_params, 
         binary_code = ''
         for action in actions:
             binary_code = binary_code + str(action[0].item())
-
         rewards, formulas = get_reward(bs, actions, trainable_tree, tree_params, tree_optim)
         rewards = torch.cuda.FloatTensor(rewards).view(-1, 1)
+        rewards[rewards != rewards] = 1e10
+
+        error = rewards
+        batch_min_idx = torch.argmin(error)
+        batch_min_action = [v[batch_min_idx] for v in actions]
+
+        clusters, new_best_loss = restruct_and_tune(batch_min_action, pre_its=100, tune_its=100, thresh=thresh)
+        error[batch_min_idx] = new_best_loss
+        batch_smallest = error.min()
+
         # discount
         if 1 > hyperparams['discount'] > 0:
             rewards = discount(rewards, hyperparams['discount'])
@@ -742,19 +927,17 @@ def train_controller(Controller, Controller_optim, trainable_tree, tree_params, 
         base = args.base
         rewards[rewards > base] = base
         rewards[rewards != rewards] = 1e10
-        error = rewards
         rewards = 1 / (1 + torch.sqrt(rewards))
-
-        batch_smallest = error.min()
-        batch_min_idx = torch.argmin(error)
-        batch_min_action = [v[batch_min_idx] for v in actions]
-
+        #print(f'rewards: {rewards}')
         batch_best_formula = formulas[batch_min_idx]
+        if batch_smallest != batch_smallest:
+            batch_smallest = 1e10
 
-        candidates.add_new(candidate(action=batch_min_action, expression=batch_best_formula, error=batch_smallest))
+
+        candidates.add_new(candidate(action=batch_min_action, expression=batch_best_formula, error=batch_smallest, clusters=clusters))
 
         for candidate_ in candidates.candidates:
-            print('error:{} action:{} formula:{}'.format(candidate_.error.item(), [v.item() for v in candidate_.action],
+            print('error:{} action:{} formula:{}'.format(candidate_.error, [v.item() for v in candidate_.action],
                                                          candidate_.expression))
 
         # moving average baseline
@@ -806,7 +989,7 @@ def train_controller(Controller, Controller_optim, trainable_tree, tree_params, 
             '********************************************************************************************************')
         if (step + 1) % 1 == 0:
             logger.append([step + 1, loss.item(), baseline, rewards.mean(), smallest_error, best_formula])
-
+    candidates.candidates = sorted(candidates.candidates, key=lambda x: x.error)
     for candidate_ in candidates.candidates:
         print('error:{} action:{} formula:{}'.format(candidate_.error.item(), [v.item() for v in candidate_.action],
                                                      candidate_.expression))
@@ -815,8 +998,11 @@ def train_controller(Controller, Controller_optim, trainable_tree, tree_params, 
             action_string += str(v.item()) + '-'
         logger.append([666, 0, 0, action_string, candidate_.error.item(), candidate_.expression])
         # logger.append([666, 0, 0, 0, candidate_.error.item(), candidate_.expression])
-    finetune = 20000
+    finetune = 1000
     global count, leaves_cnt
+    '''
+    print(f'Reordering Candidates with Medium-Tune')
+    cand_list = []
     for candidate_ in candidates.candidates:
         trainable_tree = learnable_compuatation_tree()
         trainable_tree = trainable_tree.cuda()
@@ -832,50 +1018,265 @@ def train_controller(Controller, Controller_optim, trainable_tree, tree_params, 
                 params.append(param)
 
         reset_params(params)
+        ## COARSE TUNE TO SPEED UP FINE-TUNE:
+        cand_func = (trainable_tree, candidate_.action)
+        x_t = func.get_pts(num_paths, dims=args.dim - 1)
+        loss = func.get_loss(cand_func, func.true_solution, x_t, sigma)
+        loss_before = loss.item()
+
         tree_optim = torch.optim.Adam(params, lr=1e-2)
-
-        for current_iter in range(finetune):
-            error = best_error(candidate_.action, trainable_tree)
+        for _ in range(20):
+            x_t = func.get_pts(num_paths, dims=args.dim - 1)
+            loss = func.get_loss(cand_func, func.true_solution, x_t, sigma)
             tree_optim.zero_grad()
-            error.backward()
-
-            # for para in params:
-            #     if para is not None:
-            #         print(para.grad)
+            loss.backward()
             tree_optim.step()
+        tree_optim = torch.optim.LBFGS(params, lr=1, max_iter=20)
 
-            count = 0
-            leaves_cnt = 0
-            formula = inorder_visualize(basic_tree(), candidate_.action, trainable_tree)
-            leaves_cnt = 0
-            count = 0
-            suffix = 'Finetune-- Iter {current_iter} Error {error:.5f} Formula {formula}'.format(
-                current_iter=current_iter, error=error, formula=formula)
-            if (current_iter + 1) % 100 == 0:
-                logger.append([current_iter, 0, 0, 0, error.item(), formula])
-            # if smallest_error <= 1e-10:
-            #     logger.append([current_iter, 0, 0, 0, error.item(), formula])
-            #     return
-            cosine_lr(tree_optim, 1e-2, current_iter, finetune)
-            print(suffix)
+        def closure():
+            x_t = func.get_pts(num_paths, dims=args.dim - 1)
+            tree_optim.zero_grad()
+            loss = func.get_loss(cand_func, func.true_solution, x_t, sigma)
+            loss.backward()
+            return loss
 
-        numerators = []
-        denominators = []
+        tree_optim.step(closure)
+        ## END COARSE TUNE CODE
 
-        for i in range(1000):
-            print(i)
-            # x = (torch.rand(100000, args.dim).cuda()) * (args.right - args.left) + args.left
-            t = torch.rand(10000, 1).cuda()
-            x1 = (torch.rand(10000, args.dim - 1).cuda()) * (args.right - args.left) + args.left
-            x = torch.cat((t, x1), 1)
-            sq_de = torch.mean((func.true_solution(x)) ** 2)
-            sq_nu = torch.mean((func.true_solution(x) - trainable_tree(x, candidate_.action)) ** 2)
-            numerators.append(sq_nu.item())
-            denominators.append(sq_de.item())
+        ## USING COARSE TUNE, ADJUST STRUCTURE BY SETTING PARAMETERS EQUAL
+        # trying to get rid of the errors by checking if any of the parameters are infinite or nan
+        clusterable = True
+        for param in params:
+            if param.shape[-1] == args.dim:
+                for x in param[0]:
+                    if x != x or x == float("inf") or x == float("-inf"):
+                        clusterable = False
 
-        relative_l2 = math.sqrt(sum(numerators)) / math.sqrt(sum(denominators))
-        print('relative l2 error: ', relative_l2)
-        logger.append(['relative_l2', 0, 0, 0, relative_l2, 0])
+        if clustering and clusterable:
+            clusters = []
+            for param in params:
+                if param.shape[-1] == args.dim:
+                    cluster = [hcluster.fclusterdata(np.expand_dims(param[0, :].cpu().detach().numpy(), -1), thresh,
+                                                     criterion="distance") - 1]
+                    clusters.append(cluster)
+
+            trainable_tree = learnable_compuatation_tree(clusters)
+            params = []
+            for idx, v in enumerate(trainable_tree.learnable_operator_set):
+                if idx not in leaves_index:
+                    for modules in trainable_tree.learnable_operator_set[v]:
+                        for param in modules.parameters():
+                            params.append(param)
+            for module in trainable_tree.linear:
+                for param in module.parameters():
+                    params.append(param)
+
+            ## COARSE TUNE WITH NEW STRUCTURE TO SPEED UP FINE-TUNE:
+            cand_func = (trainable_tree, candidate_.action)
+            tree_optim = torch.optim.Adam(params, lr=1e-2)
+            for _ in range(20):
+                x_t = func.get_pts(num_paths, dims=args.dim - 1)
+                loss = func.get_loss(cand_func, func.true_solution, x_t, sigma)
+                tree_optim.zero_grad()
+                loss.backward()
+                tree_optim.step()
+            tree_optim = torch.optim.LBFGS(params, lr=1, max_iter=50)
+
+            def closure():
+                x_t = func.get_pts(num_paths, dims=args.dim - 1)
+                tree_optim.zero_grad()
+                loss = func.get_loss(cand_func, func.true_solution, x_t, sigma)
+                loss.backward()
+                return loss
+            tree_optim.step(closure)
+
+            # perform first 100 steps of finetune:
+            tree_optim = torch.optim.Adam(params, lr=1e-3)
+            for _ in range(250):
+                x_t = func.get_pts(num_paths, dims=args.dim - 1)
+                loss = func.get_loss(cand_func, func.true_solution, x_t, sigma)
+                tree_optim.zero_grad()
+                loss.backward()
+                tree_optim.step()
+        #save learned trees and loss:
+        if loss.item() == loss.item():
+            cand_list.append([loss.item(), trainable_tree, candidate_.action])
+        formula = inorder_visualize(basic_tree(), candidate_.action, trainable_tree)
+        print(f'Candidate: {formula}, loss: {loss.item()}')
+    cand_list.sort()
+    print('Re-sorted Candidates:')
+    for cand in cand_list:
+        print(f'Loss: {cand[0]}, Action: {cand[2]}')
+    '''
+    #Actual Fine-Tune Using the Resorted Candidates:
+    i = 0
+    stopping = False
+    '''
+    cand_number = 0
+    while i < len(cand_list) and not stopping:
+        cand = cand_list[i]
+        trainable_tree = cand[1]
+        action = cand[2]
+
+        params = []
+        for idx, v in enumerate(trainable_tree.learnable_operator_set):
+            if idx not in leaves_index:
+                for modules in trainable_tree.learnable_operator_set[v]:
+                    for param in modules.parameters():
+                        params.append(param)
+        for module in trainable_tree.linear:
+            for param in module.parameters():
+                params.append(param)
+    '''
+    while not stopping:
+        cand_number = 0
+        for candidate_ in candidates.candidates:
+            trainable_tree = learnable_compuatation_tree(candidate_.clusters)
+            params = []
+            for idx, v in enumerate(trainable_tree.learnable_operator_set):
+                if idx not in leaves_index:
+                    for modules in trainable_tree.learnable_operator_set[v]:
+                        for param in modules.parameters():
+                            params.append(param)
+            for module in trainable_tree.linear:
+                for param in module.parameters():
+                    params.append(param)
+
+            ## COARSE TUNE TO SPEED UP FINE-TUNE:
+            x_t = func.get_pts(num_paths, dims=args.dim - 1)
+            x_t.requires_grad = True
+            cand_func = (trainable_tree, candidate_.action)
+    
+            tree_optim = torch.optim.Adam(params, lr=1e-2)
+            for _ in range(20):
+                loss = func.get_loss(cand_func, func.true_solution, x_t, sigma)
+                tree_optim.zero_grad()
+                loss.backward()
+                tree_optim.step()
+
+            tree_optim = torch.optim.LBFGS(params, lr=1, max_iter=20)
+            def closure():
+                tree_optim.zero_grad()
+                loss = func.get_loss(cand_func, func.true_solution, x_t, sigma)
+                loss.backward()
+                return loss
+    
+            tree_optim.step(closure)
+            ## END COARSE TUNE CODE
+            '''
+            ## USING COARSE TUNE, ADJUST STRUCTURE BY SETTING PARAMETERS EQUAL
+            if clustering:
+                clusters = []
+                for param in params:
+                    if param.shape[-1] == args.dim:
+                        cluster = [hcluster.fclusterdata(np.expand_dims(param[0, :].cpu().detach().numpy(), -1), thresh,
+                                                         criterion="distance") - 1]
+                        clusters.append(cluster)
+    
+                trainable_tree = learnable_compuatation_tree(clusters)
+                params = []
+                for idx, v in enumerate(trainable_tree.learnable_operator_set):
+                    if idx not in leaves_index:
+                        for modules in trainable_tree.learnable_operator_set[v]:
+                            for param in modules.parameters():
+                                params.append(param)
+                for module in trainable_tree.linear:
+                    for param in module.parameters():
+                        params.append(param)
+    
+                ## COARSE TUNE WITH NEW STRUCTURE TO SPEED UP FINE-TUNE:
+                x_t = func.get_pts(num_paths, dims=args.dim - 1)
+                x_t.requires_grad = True
+                cand_func = (trainable_tree, candidate_.action)
+                tree_optim = torch.optim.Adam(params, lr=1e-2)
+                for _ in range(20):
+                    loss = func.get_loss(cand_func, func.true_solution, x_t, sigma)
+                    tree_optim.zero_grad()
+                    loss.backward()
+                    tree_optim.step()
+                tree_optim = torch.optim.LBFGS(params, lr=1, max_iter=50)
+    
+                def closure():
+                    tree_optim.zero_grad()
+                    loss = func.get_loss(cand_func, func.true_solution, x_t, sigma)
+                    loss.backward()
+                    return loss
+    
+                tree_optim.step(closure)
+                ## END COARSE TUNE CODE
+            '''
+            relatives = []
+            tree_optim = torch.optim.Adam(params, lr=1e-3)
+            error_list = []
+            for current_iter in range(finetune):
+                error = best_error(candidate_.action, trainable_tree)
+                #error = best_error(action, trainable_tree)
+                error_list.append(error.item())
+                tree_optim.zero_grad()
+                error.backward()
+                tree_optim.step()
+                # for para in params:
+                #     if para is not None:
+                #         print(para.grad)
+
+                count = 0
+                leaves_cnt = 0
+                formula = inorder_visualize(basic_tree(), candidate_.action, trainable_tree)
+                #formula = inorder_visualize(basic_tree(), action, trainable_tree)
+                leaves_cnt = 0
+                count = 0
+                suffix = 'Finetune-- Iter {current_iter} Error {error:.5f} Formula {formula}'.format(
+                    current_iter=current_iter, error=error, formula=formula)
+                if (current_iter + 1) % 100 == 0:
+                    logger.append([current_iter, 0, 0, 0, error.item(), formula])
+                # if smallest_error <= 1e-10:
+                #     logger.append([current_iter, 0, 0, 0, error.item(), formula])
+                #     return
+                cosine_lr(tree_optim, 1e-3, current_iter, finetune)
+                print(suffix)
+                if (current_iter + 1) % 10 == 0:
+                    _, relative, _ = func.get_errors(trainable_tree, candidate_.action, args.dim - 1)
+                    relatives.append(relative.item())
+
+                # adding a halt condition when the error is of the same order as machine epsilon (or the last 100 have been close)
+                #if current_iter > 100:
+                #    if sum(error_list[(current_iter - 5):])/len(error_list[(current_iter - 5):]) < 1.1e-14:
+                #        stopping = True
+                #if current_iter > 1000:
+                #    stopping = True
+                #if current_iter == finetune - 1 or stopping:
+                #    relative_l2, relative, mse = func.get_errors(trainable_tree, action, args.dim - 1)
+                #    logger.append([f'RL2: {relative_l2}', f'REL: {relative}', f'MSE: {mse}', f'Loss: {error.item()}', 0, 0])
+                if current_iter == finetune - 1 or stopping:
+                    relative_l2, relative, mse = func.get_errors(trainable_tree, candidate_.action, args.dim - 1)
+                    logger.append([f'RL2: {relative_l2}', f'REL: {relative}', f'MSE: {mse}', f'Loss: {error.item()}', 0, 0])
+                if stopping:
+                    break
+
+            plt.figure(cand_number)
+            plt.plot(error_list)
+            plt.yscale('log')
+            plt.xlabel('Iteration')
+            plt.ylabel('Loss (log scale)')
+            title = 'Equation (3.9): ' + str(args.dim - 1) + ' Dimensional Problem - Finetune Loss Plot'
+            plt.title(title)
+            name = 'cand' + str(cand_number) + '_dims' + str(args.dim) + '_var' + str(args.var) + '_plot.png'
+            plt.savefig(name, format='png')
+            # cand_number += 1
+
+            plt.figure(20 + cand_number)
+            plt.plot(relatives)
+            plt.yscale('log')
+            plt.xlabel('Iteration (in hundreds)')
+            plt.ylabel('Relative Error (log scale)')
+            title = 'Equation (3.9): ' + str(args.dim - 1) + ' Dimensional Problem - Relative Error Plot'
+            plt.title(title)
+            name = 'cand' + str(cand_number) + '_dims' + str(args.dim) + '_var' + str(args.var) + '_relative_plot.png'
+            plt.savefig(name, format='png')
+            cand_number += 1
+
+            if stopping:
+                break
 
 
 def cosine_lr(opt, base_lr, e, epochs):
@@ -886,9 +1287,9 @@ def cosine_lr(opt, base_lr, e, epochs):
 
 
 if __name__ == '__main__':
+    start = time.time()
     controller = Controller().cuda()
     hyperparams = {}
-
     hyperparams['controller_max_step'] = args.epoch
     hyperparams['discount'] = 1.0
     hyperparams['ema_baseline_decay'] = 0.95
@@ -896,6 +1297,7 @@ if __name__ == '__main__':
     hyperparams['entropy_mode'] = 'reward'
     hyperparams['controller_grad_clip'] = 0  # 10
     hyperparams['checkpoint'] = args.ckpt
+    # hyperparams['var'] = args.var
     if not os.path.isdir(hyperparams['checkpoint']):
         mkdir_p(hyperparams['checkpoint'])
     controller_optim = torch.optim.Adam(controller.parameters(), lr=hyperparams['controller_lr'])
@@ -914,3 +1316,7 @@ if __name__ == '__main__':
             params.append(param)
 
     train_controller(controller, controller_optim, trainable_tree, params, hyperparams)
+    end = time.time()
+    elapsed = end - start
+    with open(f"timing{args.dim}.txt", "a") as file:
+        file.write(f"With Top 1 Restructure in Searching: {dim} Dimensional Problem Completed in {elapsed} seconds \n")

@@ -13,6 +13,7 @@ import argparse
 import random
 import math
 import matplotlib.pyplot as plt
+import itertools
 
 parser = argparse.ArgumentParser(description='NAS')
 
@@ -80,6 +81,7 @@ class SaveBuffer(object):
                 break
             elif candidate.action == old_candidate.action:
                 flag = 0
+
 
         if flag == 1:
             if action_idx is not None:
@@ -598,7 +600,6 @@ def get_reward(bs, actions, learnable_tree, tree_params, tree_optim):
     regression_errors = []
     formulas = []
     batch_size = bs
-
     global count, leaves_cnt
 
     for bs_idx in range(batch_size):
@@ -660,7 +661,7 @@ def get_reward(bs, actions, learnable_tree, tree_params, tree_optim):
         t = torch.rand(pts_per_dim, 1).cuda()
         x1 = (torch.rand(pts_per_dim, args.dim - 1).cuda()) * (args.right - args.left) + args.left
         x = torch.cat((t, x1), 1)
-        mse = torch.mean((func.true_solution(x) - trainable_tree(x, bs_action)) ** 2)
+        mse = torch.mean(torch.abs(func.true_solution(x) - trainable_tree(x, bs_action)) ** 2)
         print(f'MSE After, {mse.item()}')
         print(f'loss after, {loss}')
         error_hist.append(loss.item())
@@ -685,7 +686,7 @@ def true(x):
     return -0.5 * (torch.sum(x ** 2, dim=1, keepdim=True))
 
 
-def best_error(best_action, learnable_tree):
+def best_error(best_action, learnable_tree, pts_per_dim=3):
     # t = torch.rand(args.domainbs, 1).cuda()
     # x1 = (torch.rand(args.domainbs, args.dim - 1).cuda()) * (args.right - args.left) + args.left
     # x = torch.cat((t, x1), 1)
@@ -727,7 +728,7 @@ def train_controller(Controller, Controller_optim, trainable_tree, tree_params, 
     bs = args.bs
     smallest_error = float('inf')
 
-    candidates = SaveBuffer(10)
+    candidates = SaveBuffer(5)
 
 
     tree_optim = None
@@ -821,7 +822,7 @@ def train_controller(Controller, Controller_optim, trainable_tree, tree_params, 
             action_string += str(v.item()) + '-'
         logger.append([666, 0, 0, action_string, candidate_.error.item(), candidate_.expression])
         # logger.append([666, 0, 0, 0, candidate_.error.item(), candidate_.expression])
-    finetune = 20000
+    finetune = len(str(dim))*5000 + 15000
     global count, leaves_cnt
     cand_number = 0
     for candidate_ in candidates.candidates:
@@ -839,11 +840,33 @@ def train_controller(Controller, Controller_optim, trainable_tree, tree_params, 
                 params.append(param)
 
         reset_params(params)
+        ## COARSE TUNE TO SPEED UP FINE-TUNE:
+        """
+        x_t, jump_mat, brownian = func.get_paths(num_paths, dims=args.dim - 1)
+        x_t.requires_grad = True
+        jump_mat.requires_grad = True
+        cand_func = (trainable_tree, candidate_.action)
+        tree_optim = torch.optim.Adam(params, lr=1e-2)
+        for _ in range(20):
+            loss = func.get_loss(cand_func, func.true_solution, x_t, jump_mat, brownian)
+            tree_optim.zero_grad()
+            loss.backward()
+            tree_optim.step()
+        tree_optim = torch.optim.LBFGS(params, lr=1, max_iter=20)
+        def closure():
+            tree_optim.zero_grad()
+            loss = func.get_loss(cand_func, func.true_solution, x_t, jump_mat, brownian)
+            loss.backward()
+            return loss
+        tree_optim.step(closure)
+        ## END COARSE TUNE CODE
+        """
         tree_optim = torch.optim.Adam(params, lr=1e-3)
-        error_hist = []
+        error_list = []
+        relatives = []
         for current_iter in range(finetune):
             error = best_error(candidate_.action, trainable_tree)
-            error_hist.append(error.item())
+            error_list.append(error.item())
             tree_optim.zero_grad()
             error.backward()
 
@@ -864,34 +887,36 @@ def train_controller(Controller, Controller_optim, trainable_tree, tree_params, 
             # if smallest_error <= 1e-10:
             #     logger.append([current_iter, 0, 0, 0, error.item(), formula])
             #     return
-            cosine_lr(tree_optim, 1e-2, current_iter, finetune)
+            cosine_lr(tree_optim, 1e-3, current_iter, finetune)
             print(suffix)
+            #if (current_iter + 1) % 100 == 0:
+            #    _, relative, _ = func.get_errors(trainable_tree, candidate_.action, args.dim - 1)
+            #    relatives.append(relative.item())
+            if current_iter == finetune - 1:
+                relative_l2, relative, mse = func.get_errors(trainable_tree, candidate_.action, args.dim - 1)
+                logger.append([f'RL2: {relative_l2}', f'REL: {relative}', f'MSE: {mse}', 0, 0, 0])
 
-        numerators = []
-        denominators = []
-        equation = str(candidate_.expression)
-        plt.plot(error_hist)
-        plt.title(equation)
-        name = str(cand_number) + 'plot.pdf'
-        plt.savefig(name, format='pdf')
+        plt.figure(cand_number)
+        plt.plot(error_list)
+        plt.yscale('log')
+        plt.xlabel('Iteration')
+        plt.ylabel('Loss (log scale)')
+        title = 'Equation (3.9): ' + str(args.dim - 1) + ' Dimensional Problem - Finetune Loss Plot'
+        plt.title(title)
+        #plt.text(len(error_list)*.5, .75*max(error_list), f'MSE = {mse}', fontsize=12)
+        #plt.text(len(error_list)*.5, .25*max(error_list), f'Relative L2 = {relative}', fontsize=12)
+        name = 'cand' + str(cand_number) + '_dims' + str(args.dim) + '_plot.png'
+        plt.savefig(name, format='png')
 
-        for i in range(1000):
-            print(i)
-            # x = (torch.rand(100000, args.dim).cuda()) * (args.right - args.left) + args.left
-            pts_per_dim = int(20000 / (args.dim - 1))
-            t = torch.rand(pts_per_dim, 1).cuda()
-            x1 = (torch.rand(pts_per_dim, args.dim - 1).cuda()) * (args.right - args.left) + args.left
-            x = torch.cat((t, x1), 1)
-            sq_de = torch.mean((func.true_solution(x)) ** 2)
-            sq_nu = torch.mean((func.true_solution(x) - trainable_tree(x, candidate_.action)) ** 2)
-            numerators.append(sq_nu.item())
-            denominators.append(sq_de.item())
-
-        relative_l2 = math.sqrt(sum(numerators)) / math.sqrt(sum(denominators))
-        print('relative l2 error: ', relative_l2)
-        logger.append(['relative_l2', 0, 0, 0, relative_l2, 0])
+        plt.figure(20 + cand_number)
+        plt.plot(relatives)
+        plt.xlabel('Iteration (in hundreds)')
+        plt.ylabel('Relative Error')
+        title = 'Equation (3.9): ' + str(args.dim - 1) + ' Dimensional Problem - Relative Error Plot'
+        plt.title(title)
+        name = 'cand' + str(cand_number) + '_dims' + str(args.dim) + '_relative_plot.png'
+        plt.savefig(name, format='png')
         cand_number += 1
-
 
 def cosine_lr(opt, base_lr, e, epochs):
     lr = 0.5 * base_lr * (math.cos(math.pi * e / epochs) + 1)
