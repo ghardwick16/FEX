@@ -1,0 +1,12 @@
+With Top 1 Restructure in Searching: 76 Dimensional Problem Completed in 25192.37665939331 seconds 
+With Top 1 Restructure in Searching: 76 Dimensional Problem Completed in 910.135751247406 seconds 
+With Top 1 Restructure in Searching: 76 Dimensional Problem Completed in 962.0807220935822 seconds 
+With Top 1 Restructure in Searching: 76 Dimensional Problem Completed in 969.0785810947418 seconds 
+With Top 1 Restructure in Searching: 76 Dimensional Problem Completed in 886.0555329322815 seconds 
+With Top 1 Restructure in Searching: 76 Dimensional Problem Completed in 845.6903502941132 seconds 
+With Top 1 Restructure in Searching: 76 Dimensional Problem Completed in 1131.1609120368958 seconds 
+With Top 1 Restructure in Searching: 76 Dimensional Problem Completed in 1233.4002840518951 seconds 
+With Top 1 Restructure in Searching: 76 Dimensional Problem Completed in 1070.8192203044891 seconds 
+With Top 1 Restructure in Searching: 76 Dimensional Problem Completed in 868.6767559051514 seconds 
+With Top 1 Restructure in Searching: 76 Dimensional Problem Completed in 1004.0851404666901 seconds 
+With Top 1 Restructure in Searching: 76 Dimensional Problem Completed in 84234.9653069973 seconds 
