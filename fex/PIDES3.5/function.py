@@ -58,8 +58,8 @@ def get_loss(func, true, x_t):  # changed to let this use the pair (learnable_tr
     sigma = .25
     lam = .3
     epsilon = .25
-    num_traps = 5  # traps super low to keep code faster
-    t = torch.linspace(start=0, end=1, steps=x_t.shape[1]).repeat(x_t.shape[0], 1).unsqueeze(2).cuda()
+    num_traps = 25  # traps super low to keep code faster
+    t = torch.linspace(start=-1, end=2, steps=x_t.shape[1]).repeat(x_t.shape[0], 1).unsqueeze(2).cuda()
     tx = torch.cat((t, x_t), dim=2)
     z = torch.linspace(0, 1, num_traps).cuda()
     x = torch.squeeze(tx[..., 1:]).cuda()
@@ -106,14 +106,7 @@ def get_loss(func, true, x_t):  # changed to let this use the pair (learnable_tr
     true_final = true(final_xt).squeeze()
     loss2 = torch.mean((u_final - true_final) ** 2)
 
-    # Step 3: loss3
-    v2 = torch.ones(u_final.shape).cuda()
-    v3 = torch.ones_like(u_final).cuda()
-    du = torch.autograd.grad(u_final, final_xt, grad_outputs=v2, create_graph=True)[0]
-    dg = torch.autograd.grad(true_final, final_xt, grad_outputs=v3, create_graph=True)[0]
-    loss3 = torch.mean((du[:, :, 1:] - dg[:, :, 1:]) ** 2)
-
-    loss = (loss1 + loss2 + loss3)  # 'loss per path per dim'
+    loss = (loss1 + loss2)  # 'loss per path per dim'
     return loss
 
 def get_errors(learnable_tree, bs_action, dims):
