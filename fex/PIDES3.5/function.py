@@ -2,51 +2,7 @@ import numpy as np
 import torch
 from torch import sin, cos, exp
 import math
-'''
-def get_paths(num_samples, dims):
-    x_0 = 1
-    mu = .1
-    sigma = 1e-4
-    lam = .3
-    theta = .3
-    steps = 50
-    domain = [0, 1]
 
-    # step 1: get jumps (i.e. jump times and jump sizes)
-    jump_t_dist = torch.distributions.exponential.Exponential(lam)
-    jump_dist = torch.distributions.multivariate_normal.MultivariateNormal(mu * torch.ones(dims),
-                                                                           sigma * torch.eye(dims))
-    jump_mat = torch.zeros(steps * num_samples, dims).cuda()
-    jump_t = 0
-    prev = 0
-    done = False
-    while not done:
-        jump_t += jump_t_dist.sample() * steps
-        # check to make sure next jump time is within range
-        if int(jump_t) < steps * num_samples:
-            # check to see if we have passed max steps, if not, continue,
-            # otherwise, we discard the update to jump_t, reset at the nearest multiple of
-            # max steps, and continue (since this is now a new trajectory)
-            if int(jump_t / steps) == int(prev / steps):
-                jump_mat[int(jump_t), :] = jump_dist.sample()
-                prev = jump_t
-            else:
-                prev = jump_t = int(jump_t / steps) * steps
-        else:
-            done = True
-    # by factoring out an x_t from the calculation below we can subtract and add values to the jump matrix to make the computation a bit faster
-    jump_mat = jump_mat.reshape((num_samples, steps, dims))
-    jump_term = torch.exp(jump_mat.reshape((num_samples, steps, dims))) - lam / steps * (
-            torch.exp(torch.tensor([mu + 1 / 2 * sigma ** 2]).cuda()) - 1)
-    pre_computed = jump_term - lam * mu / steps
-
-    # step 2: calculate trajectories of x_t, y_t given function u
-    x_t = torch.empty_like(jump_mat).cuda()
-    x_t[:, 0, :] = x_0
-    for i in range(steps - 1):
-        x_t[:, i + 1, :] = x_t[:, i, :] * pre_computed[:, i, :]
-    return x_t, jump_mat
-'''
 def get_pts(num_samples, dims):
   x = torch.empty((num_samples, 50, dims)).cuda()
   torch.randn(num_samples, 50, dims, out=x)
@@ -76,11 +32,6 @@ def get_loss(func, true, x_t):  # changed to let this use the pair (learnable_tr
         u_func = lambda y: func(y)
 
     u = u_func(tx)
-    #print(torch.squeeze(u_func(tx_expz)).shape)
-    #print(u.repeat(1,1,num_traps).shape)
-    #print(f'x: {x.shape}')
-
-    #print(f'nu: {nu.shape}')
 
     u_expz = torch.squeeze(u_func(tx_expz))
     v = torch.ones(u.shape).cuda()

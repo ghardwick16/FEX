@@ -5,7 +5,6 @@ import random
 gpus = [1]*10
 idx = 0
 dim = 2
-
 for _ in range(5):
     gpu = gpus[idx]
     idx += 1

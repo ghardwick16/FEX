@@ -3,14 +3,21 @@ import torch
 from torch import sin, cos, exp
 import math
 from torch.autograd.functional import hessian
+
+#This function samples points from the domain.  Dimension of output is a little weird since this was carried over from
+#a previous iteration of the code when sampled SDE's (as in the PIDE paper).  Note that this samples points of X, our
+#space variable.  T is not sampled randomly, we use a linspace for it to ensure that we cover the domain of time well
+
 def get_pts(num_samples, dims):
   x = torch.empty((num_samples, 50, dims)).cuda()
   torch.randn(num_samples, 50, dims, out=x)
   x.requires_grad = True
   return x
 
-def get_loss(func, true, x_t, sigma):  # changed to let this use the pair (learnable_tree, bs_action) for computation directly
-    # parameters for the LHS
+#Function to compare RHS and LHS of PIDE.  Note that I have added sigma (variance) as an input so that I can easily
+#change it run to run
+
+def get_loss(func, true, x_t, sigma):
     mu = .1
     lam = .3
     theta = .2
@@ -23,8 +30,8 @@ def get_loss(func, true, x_t, sigma):  # changed to let this use the pair (learn
     t = torch.linspace(start=left, end=right, steps=x_t.shape[1]).repeat(x_t.shape[0], 1).unsqueeze(2).cuda()
     tx = torch.cat((t, x_t), dim=2)
 
-    ### We have two cases:  either we pass in the condidate function in the form
-    ### (learnable_tree, bs_action) or the true function (for measuring performance)
+    # We have two cases:  either we pass in the condidate function in the form
+    # (learnable_tree, bs_action) or the true function
     if type(func) is tuple:
         learnable_tree = func[0]
         bs_action = func[1]
@@ -40,10 +47,10 @@ def get_loss(func, true, x_t, sigma):  # changed to let this use the pair (learn
     ut = du[..., 0]
     ux = torch.squeeze(du[..., 1:])
 
-
     hes_diag = torch.empty_like(x_t).cuda()
     v1 = torch.ones_like(x_t).cuda()
 
+    # Here we calculate sigma*sigma^T*H(u)
     if du.requires_grad:
         hess = torch.autograd.grad(ux, tx, grad_outputs=v1, create_graph=True)[0][..., 1:]
         hes_diag[..., 0] = hess[...,0]
@@ -56,7 +63,6 @@ def get_loss(func, true, x_t, sigma):  # changed to let this use the pair (learn
     tx_shift = torch.empty_like(tx).cuda()
     tx_shift[:, :, :] = tx[:, :, :]
     tx_shift[..., 1:] += mu
-    # n2 = lam * (u(tx_shift).squeeze() - u_tx)
 
     # 1st derivs
     v = torch.ones_like(u_tx).cuda()
@@ -69,31 +75,30 @@ def get_loss(func, true, x_t, sigma):  # changed to let this use the pair (learn
     if du.requires_grad:
         hes_diag1[..., :] = torch.autograd.grad(du_tx_shift[..., 1:], tx_shift, grad_outputs=v1, create_graph=True)[0][
                             ..., 1:]
-        #print(torch.autograd.grad(du_tx_shift[..., 1:], tx_shift, grad_outputs=v1, create_graph=True))
     else:
         hes_diag1 = torch.zeros_like(du_tx_shift).cuda()
 
     expect = u_tx_shift + 1 / 2 * torch.sum(hes_diag1, dim=-1) * sigma ** 2
-    # print(expect)
     n2 = lam * (expect - u_tx)
 
     ### INT z * grad(u) d nu
     z_vec = lam * mu * torch.ones_like(ux)
     n3 = torch.sum(ux * z_vec, dim=-1)
 
+    ### norm of x
+    x_norm = torch.sqrt(torch.sum(tx[..., 1:] ** 2, dim=-1))
+
+    # Step 1:  loss1
+    LHS = ut + epsilon / 2 * x_norm * torch.sum(tx[..., 1:] * ux, dim=-1) + 1 / 2 * theta ** 2 * trace_hessian + (
+                n2 - n3)
+    RHS = lam * (mu ** 2 + sigma ** 2) + (2 * dims - 1) / dims * theta ** 2 + epsilon / dims * x_norm ** 3
+    loss1 = torch.mean((LHS - RHS) ** 2)
+
     # Step 2:  loss2
     final_xt = torch.cat((t[:, -1, :].unsqueeze(1), x_t[:, -1, :].unsqueeze(1)), dim=2).cuda()
     u_final = u(final_xt).squeeze()
     true_final = true(final_xt).squeeze()
     loss2 = torch.mean((u_final - true_final) ** 2)
-
-    ### norm of x
-    x_norm = torch.sqrt(torch.sum(tx[..., 1:] ** 2, dim=-1))
-
-    # print('theta**2:', torch.mean(1 / 2 * theta ** 2 * trace_hessian))
-    LHS = ut + epsilon / 2 * x_norm * torch.sum(tx[..., 1:] * ux, dim=-1) + 1 / 2 * theta ** 2 * trace_hessian + (n2 - n3)
-    RHS = lam * (mu ** 2 + sigma ** 2) + (2 * dims - 1) / dims * theta ** 2 + epsilon / dims * x_norm ** 3
-    loss1 = torch.mean((LHS - RHS) ** 2)
 
     return loss1 + loss2
 

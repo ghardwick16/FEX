@@ -1,6 +1,6 @@
 import os
 
-gpus = [4,5,6]*5
+gpus = [1]*5
 idx = 0
 dim = 2
 for _ in range(5):

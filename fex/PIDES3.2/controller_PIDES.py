@@ -829,6 +829,8 @@ def train_controller(Controller, Controller_optim, trainable_tree, tree_params, 
             #     return
             cosine_lr(tree_optim, 1e-3, current_iter, finetune)
             print(suffix)
+
+            #Compute relative errors each 100 iterations of finetune (for plotting)
             '''
             if (current_iter+1) % 100 == 0:
                 _, relative, _ = func.get_errors(trainable_tree, candidate_.action, args.dim - 1)
@@ -837,6 +839,8 @@ def train_controller(Controller, Controller_optim, trainable_tree, tree_params, 
             if current_iter == finetune - 1:
                 relative_l2, relative, mse = func.get_errors(trainable_tree, candidate_.action, args.dim - 1)
                 logger.append([f'RL2: {relative_l2}', f'REL: {relative}', f'MSE: {mse}', 0, 0, 0])
+
+        #Code for plotting relative error and loss
         '''
         plt.figure(cand_number)
         plt.plot(error_list)
