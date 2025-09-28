@@ -831,39 +831,39 @@ def train_controller(Controller, Controller_optim, trainable_tree, tree_params, 
             print(suffix)
 
             # Compute relative errors each 100 iterations of finetune (for plotting)
-            '''
+
             if (current_iter+1) % 100 == 0:
                 _, relative, _ = func.get_errors(trainable_tree, candidate_.action, args.dim - 1)
                 relatives.append(relative.item())
-            '''
+
             if current_iter == finetune - 1:
                 relative_l2, relative, mse = func.get_errors(trainable_tree, candidate_.action, args.dim - 1)
                 logger.append([f'RL2: {relative_l2}', f'REL: {relative}', f'MSE: {mse}', 0, 0, 0])
 
         # Code for plotting relative error and loss
-        '''
+
         plt.figure(cand_number)
         plt.plot(error_list)
         plt.yscale('log')
-        plt.xlabel('Iteration')
-        plt.ylabel('Loss (log scale)')
-        title = 'Equation (3.5): Finetune Loss Plot'
-        plt.title(title)
+        plt.xlabel('Iteration', fontsize = 14)
+        plt.ylabel('Loss (log scale)', fontsize = 14)
+        plt.xticks(fontsize=14)
+        plt.yticks(fontsize=14)
         name = 'cand' + str(cand_number) + '_dims' + str(args.dim) + '_plot.png'
-        plt.savefig(name, format='png')
+        plt.savefig(name, format='png', bbox_inches='tight')
         # cand_number += 1
 
         plt.figure(20 + cand_number)
         plt.plot(relatives)
         plt.yscale('log')
-        plt.xlabel('Iteration (in hundreds)')
-        plt.ylabel('Relative Error (log scale)')
-        title = 'Equation (3.5): Relative Error Plot'
-        plt.title(title)
+        plt.xlabel('Iteration (in hundreds)', fontsize = 14)
+        plt.ylabel('Relative Error (log scale)', fontsize = 14)
+        plt.xticks(fontsize=14)
+        plt.yticks(fontsize=14)
         name = 'cand' + str(cand_number) + '_dims' + str(args.dim) + '_relative_plot.png'
-        plt.savefig(name, format='png')
+        plt.savefig(name, format='png', bbox_inches='tight')
         cand_number += 1
-        '''
+
 
 def cosine_lr(opt, base_lr, e, epochs):
     lr = 0.5 * base_lr * (math.cos(math.pi * e / epochs) + 1)

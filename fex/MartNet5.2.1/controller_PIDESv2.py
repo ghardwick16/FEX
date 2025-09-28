@@ -1299,17 +1299,21 @@ def train_controller(Controller, Controller_optim, trainable_tree, tree_params, 
                 cosine_lr(tree_optim, 1e-3, current_iter, finetune)
                 print(suffix)
                 '''
+                # uncomment next if statement if plotting
+
                 if (current_iter + 1) % 10 == 0:
-                    _, relative, _ = func.get_errors(trainable_tree, candidate_.action, candidate_.leaf_action, dim=dim)
+                    _, relative, _ = func.get_errors(trainable_tree, candidate_.action, args.dim)
                     relatives.append(relative.item())
 
-                # adding a halt condition when the error is of the same order as machine epsilon (or the last 100 have been close)
-                
+                # adding a halt condition when the error is of the same order as machine epsilon (or the last 100 have been close).  
+                # Uncomment this next if statement for timing purposes
+
                 if current_iter > 100:
                     if sum(error_list[(current_iter - 5):])/len(error_list[(current_iter - 5):]) < 1.1e-14:
                         stopping = True
 
-        
+                # Use this next if statement to hard code a stop point in fine-tuning.  useful for plotting (so that iterations is the same on all plots).
+
                 if current_iter > 1500:
                     stopping = True
                 '''
@@ -1338,6 +1342,9 @@ def train_controller(Controller, Controller_optim, trainable_tree, tree_params, 
                     print(f'REL: {relative_error}', f'L2_Rel: {l2_rel}', f'MSE: {mse}', f'Loss: {error.item()}')
                 if stopping:
                     break
+
+            # Main Plotting Code:  Uncomment all of the below to write the plots.  Note: Requires you to have uncommented the appropriate blocks above
+
             '''       
             plt.figure(cand_number)
             plt.plot(error_list)

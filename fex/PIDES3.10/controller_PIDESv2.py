@@ -1008,20 +1008,21 @@ def train_controller(Controller, Controller_optim, trainable_tree, tree_params, 
                 print(suffix)
 
                 #uncomment this block for plotting:
-                '''
+
                 if (current_iter + 1) % 10 == 0:
                     _, relative, _ = func.get_errors(trainable_tree, candidate_.action, args.dim - 1)
                     relatives.append(relative.item())
-                '''
+
 
                 # adding a halt condition when the error is of the same order as machine epsilon (or the last 100 have been close)
-                if current_iter > 100:
+                '''               if current_iter > 100:
                     if sum(error_list[(current_iter - 5):])/len(error_list[(current_iter - 5):]) < 1.3e-14:
-                        stopping = True
+                        stop
+                '''
                 #if current_iter > idx + 200:
                 #    stopping = True
-                #if current_iter > 1500:
-                #    stopping = True
+                if current_iter > 1500:
+                    stopping = True
                 if current_iter == finetune - 1 or stopping:
                     relative_l2, relative, mse = func.get_errors(trainable_tree, candidate_.action, args.dim - 1)
                     logger.append([f'RL2: {relative_l2}', f'REL: {relative}', f'MSE: {mse}', f'Loss: {error.item()}', 0, 0])
@@ -1029,29 +1030,28 @@ def train_controller(Controller, Controller_optim, trainable_tree, tree_params, 
                     break
 
             #uncomment this block for plotting:
-            '''
+
             plt.figure(cand_number)
             plt.plot(error_list)
             plt.yscale('log')
-            plt.xlabel('Iteration')
-            plt.ylabel('Loss (log scale)')
-            title = 'Equation (3.10): ' + str(args.dim - 1) + ' Dimensional Problem - Finetune Loss Plot'
-            plt.title(title)
+            plt.xlabel('Iteration', fontsize = 14)
+            plt.ylabel('Loss (log scale)', fontsize = 14)
+            plt.xticks(fontsize=14)
+            plt.yticks(fontsize=14)
             name = 'cand' + str(cand_number) + '_dims' + str(args.dim) + '_var' + str(args.var) + '_plot.png'
-            plt.savefig(name, format='png')
+            plt.savefig(name, format='png', bbox_inches='tight')
             # cand_number += 1
 
             plt.figure(20 + cand_number)
             plt.plot(relatives)
             plt.yscale('log')
-            plt.xlabel('Iteration (in hundreds)')
-            plt.ylabel('Relative Error (log scale)')
-            title = 'Equation (3.10): ' + str(args.dim - 1) + ' Dimensional Problem - Relative Error Plot'
-            plt.title(title)
+            plt.xlabel('Iteration (in hundreds)', fontsize = 14)
+            plt.ylabel('Relative Error (log scale)', fontsize = 14)
+            plt.xticks(fontsize=14)
+            plt.yticks(fontsize=14)
             name = 'cand' + str(cand_number) + '_dims' + str(args.dim) + '_var' + str(args.var) + '_relative_plot.png'
-            plt.savefig(name, format='png')
+            plt.savefig(name, format='png', bbox_inches='tight')
             cand_number += 1
-            '''
 
             if stopping:
                 break

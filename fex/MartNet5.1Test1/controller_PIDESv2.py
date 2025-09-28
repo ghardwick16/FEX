@@ -779,10 +779,6 @@ def get_reward(bs, actions, learnable_tree, tree_optim):
             error_hist.append(loss.item())
             return loss
         tree_optim.step(closure)
-        #x_t = func.get_pts(num_paths, dim - 1)
-        #loss = func.get_loss(cand_func, func.true_solution, x_t, sigma)
-        #print(f'loss after, {loss}')
-        #error_hist.append(loss.item())
         print('min: ', min(error_hist))
         regression_errors.append(min(error_hist))
 
@@ -892,21 +888,12 @@ def restruct_and_tune(action, pre_its, tune_its, thresh, saved_params):
 
 
 def best_error(best_action, learnable_tree):
-    # t = torch.rand(args.domainbs, 1).cuda()
-    # x1 = (torch.rand(args.domainbs, args.dim - 1).cuda()) * (args.right - args.left) + args.left
-    # x = torch.cat((t, x1), 1)
-    # x.requires_grad = True
     x = func.get_pts(num_samples, dim)
     bd_x = func.get_bdry_pts(num_samples, dim)
     bs_action = best_action
 
     cand_func = (learnable_tree, bs_action)
 
-    # bd_pts = get_boundary(args.bdbs, dim)
-    # bc_true = func.true_solution(bd_pts)
-    # bd_nn = learnable_tree(bd_pts, bs_action)
-    # bd_error = torch.nn.functional.mse_loss(bc_true, bd_nn)
-    # function_error = torch.nn.functional.mse_loss(func.LHS_pde(lhs_func, x), func.RHS_pde(x))
     regression_error = func.get_loss(cand_func, x, bd_x, get_hes_flag(best_action))
 
     print(f'error: {regression_error}')
@@ -1059,8 +1046,6 @@ def train_controller(Controller, Controller_optim, trainable_tree, tree_params, 
                         for param in modules.parameters():
                             params.append(param)
             for linear in trainable_tree.linear:
-                # for param in linear.parameters():
-                #    tree_params.append(param)
                 params.append(linear.weight)
                 params.append(linear.bias)
             for input in trainable_tree.input:
@@ -1099,40 +1084,37 @@ def train_controller(Controller, Controller_optim, trainable_tree, tree_params, 
                 x = func.get_pts(num_samples, dim)
                 bd_x = func.get_bdry_pts(num_samples, dim)
                 error = func.get_loss(cand_func, x, bd_x, fast_hes)
-                #error = best_error(action, trainable_tree)
                 error_list.append(error.item())
                 error.backward()
                 tree_optim.step()
-                # for para in params:
-                #     if para is not None:
-                #         print(para.grad)
 
                 count = 0
                 leaves_cnt = 0
                 formula = inorder_visualize(basic_tree(), candidate_.action, trainable_tree)
-                #formula = inorder_visualize(basic_tree(), action, trainable_tree)
                 leaves_cnt = 0
                 count = 0
                 suffix = 'Finetune-- Iter {current_iter} Error {error:.5f} Formula {formula}'.format(
                     current_iter=current_iter, error=error, formula=formula)
                 if (current_iter + 1) % 100 == 0:
                     logger.append([current_iter, 0, 0, 0, error.item(), formula])
-                # if smallest_error <= 1e-10:
-                #     logger.append([current_iter, 0, 0, 0, error.item(), formula])
-                #     return
+
                 cosine_lr(tree_optim, 1e-3, current_iter, finetune)
                 print(suffix)
                 '''
+                # uncomment next if statement if plotting
+                
                 if (current_iter + 1) % 10 == 0:
                     _, relative, _ = func.get_errors(trainable_tree, candidate_.action, args.dim)
                     relatives.append(relative.item())
 
-                # adding a halt condition when the error is of the same order as machine epsilon (or the last 100 have been close)
+                # adding a halt condition when the error is of the same order as machine epsilon (or the last 100 have been close).  
+                # Uncomment this next if statement for timing purposes
                 
                 if current_iter > 100:
                     if sum(error_list[(current_iter - 5):])/len(error_list[(current_iter - 5):]) < 1.1e-14:
                         stopping = True
                 
+                # Use this next if statement to hard code a stop point in fine-tuning.  useful for plotting (so that iterations is the same on all plots).
                 
                 if current_iter > 1500:
                     stopping = True
@@ -1145,6 +1127,9 @@ def train_controller(Controller, Controller_optim, trainable_tree, tree_params, 
                     logger.append([f'RL2: {relative_l2}', f'REL: {relative}', f'MSE: {mse}', f'Loss: {error.item()}', 0, 0])
                 if stopping:
                     break
+
+            # Main Plotting Code:  Uncomment all of the below to write the plots.  Note: Requires you to have uncommented the appropriate blocks above
+
             '''
             plt.figure(cand_number)
             plt.plot(error_list)

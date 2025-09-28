@@ -813,7 +813,7 @@ def restruct_and_tune(action, pre_its, tune_its, thresh):
                                                  criterion="distance") - 1]
             clusters.append(cluster)
 
-    new_tree = learnable_compuatation_tree(clusters)
+    new_tree = learnable_compuatation_tree(clusters).cuda()
     params = []
     for idx, v in enumerate(new_tree.learnable_operator_set):
         if idx not in leaves_index:
@@ -998,136 +998,10 @@ def train_controller(Controller, Controller_optim, trainable_tree, tree_params, 
             action_string += str(v.item()) + '-'
         logger.append([666, 0, 0, action_string, candidate_.error.item(), candidate_.expression])
         # logger.append([666, 0, 0, 0, candidate_.error.item(), candidate_.expression])
-    finetune = 1000
+    finetune = 5000
     global count, leaves_cnt
-    '''
-    print(f'Reordering Candidates with Medium-Tune')
-    cand_list = []
-    for candidate_ in candidates.candidates:
-        trainable_tree = learnable_compuatation_tree()
-        trainable_tree = trainable_tree.cuda()
-
-        params = []
-        for idx, v in enumerate(trainable_tree.learnable_operator_set):
-            if idx not in leaves_index:
-                for modules in trainable_tree.learnable_operator_set[v]:
-                    for param in modules.parameters():
-                        params.append(param)
-        for module in trainable_tree.linear:
-            for param in module.parameters():
-                params.append(param)
-
-        reset_params(params)
-        ## COARSE TUNE TO SPEED UP FINE-TUNE:
-        cand_func = (trainable_tree, candidate_.action)
-        x_t = func.get_pts(num_paths, dims=args.dim - 1)
-        loss = func.get_loss(cand_func, func.true_solution, x_t, sigma)
-        loss_before = loss.item()
-
-        tree_optim = torch.optim.Adam(params, lr=1e-2)
-        for _ in range(20):
-            x_t = func.get_pts(num_paths, dims=args.dim - 1)
-            loss = func.get_loss(cand_func, func.true_solution, x_t, sigma)
-            tree_optim.zero_grad()
-            loss.backward()
-            tree_optim.step()
-        tree_optim = torch.optim.LBFGS(params, lr=1, max_iter=20)
-
-        def closure():
-            x_t = func.get_pts(num_paths, dims=args.dim - 1)
-            tree_optim.zero_grad()
-            loss = func.get_loss(cand_func, func.true_solution, x_t, sigma)
-            loss.backward()
-            return loss
-
-        tree_optim.step(closure)
-        ## END COARSE TUNE CODE
-
-        ## USING COARSE TUNE, ADJUST STRUCTURE BY SETTING PARAMETERS EQUAL
-        # trying to get rid of the errors by checking if any of the parameters are infinite or nan
-        clusterable = True
-        for param in params:
-            if param.shape[-1] == args.dim:
-                for x in param[0]:
-                    if x != x or x == float("inf") or x == float("-inf"):
-                        clusterable = False
-
-        if clustering and clusterable:
-            clusters = []
-            for param in params:
-                if param.shape[-1] == args.dim:
-                    cluster = [hcluster.fclusterdata(np.expand_dims(param[0, :].cpu().detach().numpy(), -1), thresh,
-                                                     criterion="distance") - 1]
-                    clusters.append(cluster)
-
-            trainable_tree = learnable_compuatation_tree(clusters)
-            params = []
-            for idx, v in enumerate(trainable_tree.learnable_operator_set):
-                if idx not in leaves_index:
-                    for modules in trainable_tree.learnable_operator_set[v]:
-                        for param in modules.parameters():
-                            params.append(param)
-            for module in trainable_tree.linear:
-                for param in module.parameters():
-                    params.append(param)
-
-            ## COARSE TUNE WITH NEW STRUCTURE TO SPEED UP FINE-TUNE:
-            cand_func = (trainable_tree, candidate_.action)
-            tree_optim = torch.optim.Adam(params, lr=1e-2)
-            for _ in range(20):
-                x_t = func.get_pts(num_paths, dims=args.dim - 1)
-                loss = func.get_loss(cand_func, func.true_solution, x_t, sigma)
-                tree_optim.zero_grad()
-                loss.backward()
-                tree_optim.step()
-            tree_optim = torch.optim.LBFGS(params, lr=1, max_iter=50)
-
-            def closure():
-                x_t = func.get_pts(num_paths, dims=args.dim - 1)
-                tree_optim.zero_grad()
-                loss = func.get_loss(cand_func, func.true_solution, x_t, sigma)
-                loss.backward()
-                return loss
-            tree_optim.step(closure)
-
-            # perform first 100 steps of finetune:
-            tree_optim = torch.optim.Adam(params, lr=1e-3)
-            for _ in range(250):
-                x_t = func.get_pts(num_paths, dims=args.dim - 1)
-                loss = func.get_loss(cand_func, func.true_solution, x_t, sigma)
-                tree_optim.zero_grad()
-                loss.backward()
-                tree_optim.step()
-        #save learned trees and loss:
-        if loss.item() == loss.item():
-            cand_list.append([loss.item(), trainable_tree, candidate_.action])
-        formula = inorder_visualize(basic_tree(), candidate_.action, trainable_tree)
-        print(f'Candidate: {formula}, loss: {loss.item()}')
-    cand_list.sort()
-    print('Re-sorted Candidates:')
-    for cand in cand_list:
-        print(f'Loss: {cand[0]}, Action: {cand[2]}')
-    '''
-    #Actual Fine-Tune Using the Resorted Candidates:
     i = 0
     stopping = False
-    '''
-    cand_number = 0
-    while i < len(cand_list) and not stopping:
-        cand = cand_list[i]
-        trainable_tree = cand[1]
-        action = cand[2]
-
-        params = []
-        for idx, v in enumerate(trainable_tree.learnable_operator_set):
-            if idx not in leaves_index:
-                for modules in trainable_tree.learnable_operator_set[v]:
-                    for param in modules.parameters():
-                        params.append(param)
-        for module in trainable_tree.linear:
-            for param in module.parameters():
-                params.append(param)
-    '''
     while not stopping:
         cand_number = 0
         for candidate_ in candidates.candidates:
@@ -1163,48 +1037,6 @@ def train_controller(Controller, Controller_optim, trainable_tree, tree_params, 
     
             tree_optim.step(closure)
             ## END COARSE TUNE CODE
-            '''
-            ## USING COARSE TUNE, ADJUST STRUCTURE BY SETTING PARAMETERS EQUAL
-            if clustering:
-                clusters = []
-                for param in params:
-                    if param.shape[-1] == args.dim:
-                        cluster = [hcluster.fclusterdata(np.expand_dims(param[0, :].cpu().detach().numpy(), -1), thresh,
-                                                         criterion="distance") - 1]
-                        clusters.append(cluster)
-    
-                trainable_tree = learnable_compuatation_tree(clusters)
-                params = []
-                for idx, v in enumerate(trainable_tree.learnable_operator_set):
-                    if idx not in leaves_index:
-                        for modules in trainable_tree.learnable_operator_set[v]:
-                            for param in modules.parameters():
-                                params.append(param)
-                for module in trainable_tree.linear:
-                    for param in module.parameters():
-                        params.append(param)
-    
-                ## COARSE TUNE WITH NEW STRUCTURE TO SPEED UP FINE-TUNE:
-                x_t = func.get_pts(num_paths, dims=args.dim - 1)
-                x_t.requires_grad = True
-                cand_func = (trainable_tree, candidate_.action)
-                tree_optim = torch.optim.Adam(params, lr=1e-2)
-                for _ in range(20):
-                    loss = func.get_loss(cand_func, func.true_solution, x_t, sigma)
-                    tree_optim.zero_grad()
-                    loss.backward()
-                    tree_optim.step()
-                tree_optim = torch.optim.LBFGS(params, lr=1, max_iter=50)
-    
-                def closure():
-                    tree_optim.zero_grad()
-                    loss = func.get_loss(cand_func, func.true_solution, x_t, sigma)
-                    loss.backward()
-                    return loss
-    
-                tree_optim.step(closure)
-                ## END COARSE TUNE CODE
-            '''
             relatives = []
             tree_optim = torch.optim.Adam(params, lr=1e-3)
             error_list = []
@@ -1234,16 +1066,19 @@ def train_controller(Controller, Controller_optim, trainable_tree, tree_params, 
                 #     return
                 cosine_lr(tree_optim, 1e-3, current_iter, finetune)
                 print(suffix)
+
                 if (current_iter + 1) % 10 == 0:
                     _, relative, _ = func.get_errors(trainable_tree, candidate_.action, args.dim - 1)
                     relatives.append(relative.item())
 
                 # adding a halt condition when the error is of the same order as machine epsilon (or the last 100 have been close)
-                #if current_iter > 100:
-                #    if sum(error_list[(current_iter - 5):])/len(error_list[(current_iter - 5):]) < 1.1e-14:
-                #        stopping = True
-                #if current_iter > 1000:
-                #    stopping = True
+                '''
+                if current_iter > 100:
+                    if sum(error_list[(current_iter - 5):])/len(error_list[(current_iter - 5):]) < 1.1e-14:
+                        stopping = True
+                '''
+                if current_iter > 1500:
+                    stopping = True
                 #if current_iter == finetune - 1 or stopping:
                 #    relative_l2, relative, mse = func.get_errors(trainable_tree, action, args.dim - 1)
                 #    logger.append([f'RL2: {relative_l2}', f'REL: {relative}', f'MSE: {mse}', f'Loss: {error.item()}', 0, 0])
@@ -1256,23 +1091,27 @@ def train_controller(Controller, Controller_optim, trainable_tree, tree_params, 
             plt.figure(cand_number)
             plt.plot(error_list)
             plt.yscale('log')
-            plt.xlabel('Iteration')
-            plt.ylabel('Loss (log scale)')
-            title = 'Equation (3.9): ' + str(args.dim - 1) + ' Dimensional Problem - Finetune Loss Plot'
-            plt.title(title)
+            plt.xlabel('Iteration', fontsize = 14)
+            plt.ylabel('Loss (log scale)', fontsize = 14)
+            plt.xticks(fontsize=14)
+            plt.yticks(fontsize=14)
+            # title = 'Equation (3.9): ' + str(args.dim - 1) + ' Dimensional Problem - Finetune Loss Plot'
+            # plt.title(title)
             name = 'cand' + str(cand_number) + '_dims' + str(args.dim) + '_var' + str(args.var) + '_plot.png'
-            plt.savefig(name, format='png')
+            plt.savefig(name, format='png', bbox_inches='tight')
             # cand_number += 1
 
             plt.figure(20 + cand_number)
             plt.plot(relatives)
             plt.yscale('log')
-            plt.xlabel('Iteration (in hundreds)')
-            plt.ylabel('Relative Error (log scale)')
-            title = 'Equation (3.9): ' + str(args.dim - 1) + ' Dimensional Problem - Relative Error Plot'
-            plt.title(title)
+            plt.xlabel('Iteration (in hundreds)', fontsize = 14)
+            plt.ylabel('Relative Error (log scale)', fontsize = 14)
+            plt.xticks(fontsize=14)
+            plt.yticks(fontsize=14)
+            # title = 'Equation (3.9): ' + str(args.dim - 1) + ' Dimensional Problem - Relative Error Plot'
+            # plt.title(title)
             name = 'cand' + str(cand_number) + '_dims' + str(args.dim) + '_var' + str(args.var) + '_relative_plot.png'
-            plt.savefig(name, format='png')
+            plt.savefig(name, format='png', bbox_inches='tight')
             cand_number += 1
 
             if stopping:
@@ -1319,4 +1158,4 @@ if __name__ == '__main__':
     end = time.time()
     elapsed = end - start
     with open(f"timing{args.dim}.txt", "a") as file:
-        file.write(f"With Top 1 Restructure in Searching: {dim} Dimensional Problem Completed in {elapsed} seconds \n")
+        file.write(f"{dim} Dimensional Problem Completed in {elapsed} seconds \n")

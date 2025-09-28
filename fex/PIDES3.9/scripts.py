@@ -10,17 +10,17 @@ import random
 # NOTE: plotting and timing are mutually exclusive.  If you uncomment the lines in controller to make plots, timing
 # results will be inaccurate.
 
-gpus = [0]*200
+gpus = [0,1,2]*200
 idx = 0
-for dim in [3, 5, 7, 9, 11, 21, 31, 41, 51, 61, 71, 81, 91, 101]:
+for dim in [101]:
     for var in [.0001]:
-        for _ in range(10):
+        for _ in range(1):
             gpu = gpus[idx]
             idx += 1
             thresh = 1/(dim**2)
             epochs = 50
-            os.system('screen python controller_PIDESv2.py --epoch ' + str(epochs) + ' --bs 10 --greedy 0.1 --gpu ' + str(
+            os.system('python controller_PIDESv2.py --epoch ' + str(epochs) + ' --bs 10 --greedy 0.1 --gpu ' + str(
             gpu) + ' --ckpt t_range_0_1_2ksearch_int20k_bd4kDim' + str(
             dim) + ' --tree depth2_sub --random_step 3 --lr 0.001 --dim ' + str(
-            dim) + ' --base 1000 --left 0 --right 1 --clustering_thresh ' + str(thresh) + ' --var ' + str(var))
+            dim) + ' --base 1000 --left 0 --right 1 --var ' + str(var) + ' --clustering_thresh ' + str(thresh))
 
