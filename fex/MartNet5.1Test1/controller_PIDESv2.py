@@ -49,6 +49,10 @@ thresh = args.clustering_thresh
 
 dim = args.dim
 num_samples = 5000
+
+# If a clustering threshold is used as an input parameter in the script, use it.  Otherwise
+# do not use the clustering steps
+
 if args.clustering_thresh:
     thresh = args.clustering_thresh
     clustering = True
@@ -378,9 +382,6 @@ def apply_parameters(trainable_tree, params):
             #trainable_tree.input[i].a.requires_grad = True
 
     return trainable_tree
-
-
-
 
 def inorder(tree, actions):
     global count

@@ -2,29 +2,6 @@ import numpy as np
 import torch
 from torch import sin, cos, exp
 import math
-'''
-#This function samples points from the domain.  [-1,1]^d
-def get_pts(num_samples, dims):
-    x = torch.empty((num_samples, dims)).cuda()
-    torch.rand(num_samples, dims, out=x)
-    x.requires_grad = True
-    return 2*x-1
-
-#This is a little jank, need to make sure num_samples is divisible by dims*2
-def get_bdry_pts(num_samples, dims):
-    x = torch.empty((num_samples, dims)).cuda()
-    torch.rand(num_samples, dims, out=x) * 2 - 1
-    x = 2*x-1
-    edges = dims*2
-    for i in range(edges):
-        if i % 2 == 0:
-            val = 1
-        else:
-            val = -1
-        x[int(num_samples/edges)*i:int(num_samples/edges)*(i+1),int(np.floor(i/2))] = val
-    x.requires_grad = True
-    return x
-'''
 
 def get_pts(num_samples: int, dims: int = 100):
     # Sample from a standard normal distribution
@@ -52,12 +29,13 @@ def get_bdry_pts(num_samples: int, dims: int = 100):
     unit_vectors.requires_grad = True
     return unit_vectors
 
+# function "f" from PDE:
 def f_func(x, c, omega):
     out = torch.sum((c - omega**2)*torch.cos(omega*x), dim=1)
     return out
 
-#Function to compare RHS and LHS of PIDE.  Note that I have added sigma (variance) as an input so that I can easily
-#change it run to run
+# Simple function to compute the diagonal elements of the hessian (unmixed partials). If the equation is
+# simple enough (no terms multiplied together), we can compute them without a loop, else, we need a loop.
 def get_hes_diag(grad, x, fast_hes=False):
     if grad.requires_grad:
         hes_diag = torch.empty_like(x).cuda()
@@ -72,6 +50,9 @@ def get_hes_diag(grad, x, fast_hes=False):
         hes_diag = torch.zeros_like(grad).cuda()
     return hes_diag
 
+# This computes the loss for a given candidate function.  Inputs are the sample points, the function,
+# and a flag that tells the function if it can use the faster (non looping) method to find second
+# derivatives or not.
 def get_loss(func, x, bd_x, fast):
     # parameters:
     c = -1
@@ -138,7 +119,7 @@ def get_errors(learnable_tree, bs_action, dim):
     mse = 1 / 1000 * sum(mse_list)
     return relative_l2, relative, mse
 
-
+# This is the true solution of the problem
 def true_solution(x):
     # parameters:
     omega = torch.tensor([2]).cuda()
